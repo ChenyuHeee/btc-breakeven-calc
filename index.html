@@ -17,409 +17,438 @@
         --red: #b83333;
         --red-bg: #fdf0f0;
         --yellow: #7a6200;
+        --topbar-h: 56px;
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
 
-      body {
+      html, body {
+        height: 100%;
+        overflow: hidden;
         background: var(--bg);
         font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
         color: var(--text);
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 28px 16px 48px;
-        gap: 18px;
       }
 
-      /* ── live price bar ── */
-      .live-bar {
-        width: min(640px, 100%);
+      /* Top Bar */
+      .topbar {
+        height: var(--topbar-h);
+        min-height: var(--topbar-h);
         background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        padding: 18px 22px;
+        border-bottom: 1.5px solid var(--border);
         display: flex;
         align-items: center;
-        justify-content: space-between;
         gap: 14px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        padding: 0 18px;
       }
-
-      .live-label {
-        font-size: 0.85rem;
-        color: var(--muted);
-        margin-bottom: 4px;
-      }
-
-      .live-price {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--accent);
-        font-variant-numeric: tabular-nums;
-        letter-spacing: -0.02em;
-      }
-
-      .live-price.flash { animation: flash 400ms ease; }
-
-      @keyframes flash {
-        0%   { opacity: 1; }
-        40%  { opacity: 0.35; }
-        100% { opacity: 1; }
-      }
-
-      .ws-dot {
-        width: 10px; height: 10px;
-        border-radius: 50%;
-        background: #ccc;
-        flex-shrink: 0;
-        transition: background 0.3s;
-      }
-      .ws-dot.connected { background: var(--green); box-shadow: 0 0 0 3px rgba(26,122,74,0.15); }
-      .ws-dot.error     { background: var(--red); }
-
-      .ws-info {
-        display: flex; align-items: center; gap: 8px;
-        font-size: 0.83rem; color: var(--muted);
-      }
-
+      .topbar-brand { font-weight: 700; font-size: 1.1rem; color: var(--accent); white-space: nowrap; }
+      .topbar-divider { width: 1.5px; height: 26px; background: var(--border); flex-shrink: 0; }
+      .topbar-spacer { flex: 1; }
+      .live-label { font-size: 0.7rem; color: var(--muted); }
+      .live-price { font-size: 1.25rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
+      .ws-info { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--muted); }
+      .ws-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+      .ws-dot.connected { background: #22c55e; box-shadow: 0 0 6px #22c55e88; animation: pulse 2s infinite; }
+      .ws-dot.error { background: var(--red); }
+      @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
       .use-price-btn {
-        background: #fff7ef;
-        border: 1px solid #e0bb90;
-        color: var(--accent);
-        border-radius: 999px;
-        padding: 8px 14px;
-        font: inherit; font-size: 0.88rem;
-        cursor: pointer; white-space: nowrap; flex-shrink: 0;
-        transition: background 0.15s, transform 0.12s;
+        background: var(--accent); color: #fff; border: none; border-radius: 20px;
+        padding: 7px 16px; font-size: 0.85rem; cursor: pointer; white-space: nowrap;
+        font-family: inherit; transition: opacity .15s;
       }
-      .use-price-btn:hover { background: #fce9d4; transform: translateY(-1px); }
+      .use-price-btn:hover { opacity: .85; }
 
-      /* ── main card ── */
-      .card {
-        width: min(640px, 100%);
+      /* Dashboard */
+      .dashboard {
+        height: calc(100% - var(--topbar-h));
+        display: grid;
+        grid-template-columns: 300px 1fr 300px;
+        gap: 10px;
+        padding: 10px;
+        overflow: hidden;
+      }
+
+      /* Column */
+      .col {
         background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 24px;
-        padding: 28px 26px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-        display: flex; flex-direction: column; gap: 22px;
-      }
-
-      .card-title    { font-size: 1.25rem; font-weight: 700; }
-      .card-subtitle { color: var(--muted); font-size: 0.93rem; margin-top: 4px; }
-
-      /* steps */
-      .steps { display: flex; flex-direction: column; gap: 16px; }
-      .step  { display: flex; align-items: flex-start; gap: 14px; }
-
-      .step-num {
-        width: 28px; height: 28px; border-radius: 50%;
-        background: #f3ebe0; color: var(--accent);
-        font-weight: 700; font-size: 0.88rem;
-        display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0; margin-top: 10px;
-      }
-
-      .step-body { flex: 1; }
-      .step-body label {
-        display: block; font-size: 0.9rem;
-        color: var(--muted); margin-bottom: 7px;
-      }
-
-      .input-wrap { position: relative; }
-
-      .input-wrap input {
-        width: 100%;
         border: 1.5px solid var(--border);
         border-radius: 14px;
-        padding: 13px 58px 13px 16px;
-        font: inherit; font-size: 1.1rem;
-        color: var(--text); background: #fdfaf6;
-        transition: border-color 0.15s, box-shadow 0.15s;
-        -moz-appearance: textfield;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
       }
-      .input-wrap input::-webkit-outer-spin-button,
-      .input-wrap input::-webkit-inner-spin-button { -webkit-appearance: none; }
-      .input-wrap input:focus {
-        outline: none; border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(194,106,39,0.12); background: #fff;
+      .col-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 14px; border-bottom: 1.5px solid var(--border); flex-shrink: 0;
       }
-
-      .input-unit {
-        position: absolute; right: 14px; top: 50%;
-        transform: translateY(-50%);
-        font-size: 0.85rem; color: var(--muted); pointer-events: none;
+      .col-title { font-weight: 700; font-size: 0.95rem; }
+      .col-body {
+        flex: 1; overflow-y: auto; padding: 12px 14px;
+        display: flex; flex-direction: column; gap: 10px; min-height: 0;
       }
 
-      /* fee toggle */
-      .fee-toggle {
-        font-size: 0.83rem; color: var(--accent); cursor: pointer;
-        margin-top: 8px; display: inline-block; text-decoration: underline dotted;
-      }
-      .fee-section { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
-      .fee-section.hidden { display: none; }
-      .fee-row { display: flex; gap: 12px; }
-      .fee-row .input-wrap { flex: 1; }
-      .fee-row .input-wrap input { font-size: 0.98rem; padding: 11px 42px 11px 14px; }
-      .fee-note { font-size: 0.82rem; color: var(--muted); }
-
-      /* result */
-      .result-box {
-        border-radius: 20px; padding: 22px 22px 18px;
-        display: flex; flex-direction: column; gap: 10px;
-        background: #f9f5ef; border: 1.5px solid var(--border);
-        transition: background 0.3s, border-color 0.3s;
-      }
-      .result-box.green { background: var(--green-bg); border-color: #a8ddc0; }
-      .result-box.red   { background: var(--red-bg);   border-color: #f0b8b8; }
-
-      .result-label  { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
-      .result-price  {
-        font-size: 2.4rem; font-weight: 800; color: var(--text);
-        letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1.1;
-      }
-      .result-price sup { font-size: 1rem; font-weight: 600; vertical-align: super; color: var(--muted); }
-
-      .result-verdict {
-        font-size: 1rem; font-weight: 600;
-        padding: 10px 14px; border-radius: 12px; line-height: 1.5;
-      }
-      .result-verdict.green   { color: var(--green); background: rgba(26,122,74,0.08); }
-      .result-verdict.red     { color: var(--red);   background: rgba(184,51,51,0.08); }
-      .result-verdict.neutral { color: var(--yellow); background: rgba(122,98,0,0.07); }
-
-      .result-detail { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
-      .formula-note  { font-size: 0.8rem; color: #bbb; text-align: center; }
-
-      /* ── signal card ── */
-      .signal-card {
-        width: min(640px, 100%);
-        background: var(--card);
-        border: 1.5px solid var(--border);
-        border-radius: 24px;
-        padding: 22px 24px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-        display: flex; flex-direction: column; gap: 16px;
-      }
-      .signal-card.sig-buy  { border-color: #a8ddc0; background: var(--green-bg); }
-      .signal-card.sig-wait { border-color: #f5d97a; background: #fffaeb; }
-      .signal-card.sig-no   { border-color: #f0b8b8; background: var(--red-bg); }
-
-      .signal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-      .signal-emoji  { font-size: 2.6rem; line-height: 1; }
-      .signal-main   { flex: 1; }
-      .signal-title  { font-size: 1.4rem; font-weight: 800; line-height: 1.1; }
-      .signal-sub    { font-size: 0.9rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
-      .signal-refresh {
-        font-size: 0.78rem; color: var(--muted); cursor: pointer;
-        border: 1px solid var(--border); border-radius: 999px;
-        padding: 5px 10px; background: #fff; white-space: nowrap; flex-shrink: 0;
-        transition: background 0.15s;
-      }
-      .signal-refresh:hover { background: #f3ebe0; }
-
-      .indicators { display: flex; gap: 10px; }
-      .ind-box {
-        flex: 1; background: rgba(255,255,255,0.7); border: 1px solid var(--border);
-        border-radius: 14px; padding: 12px 14px;
-        display: flex; flex-direction: column; gap: 6px;
-      }
-      .ind-label { font-size: 0.78rem; color: var(--muted); }
-      .ind-value { font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-      .ind-value.good { color: var(--green); }
-      .ind-value.bad  { color: var(--red); }
-      .ind-value.mid  { color: var(--yellow); }
-      .ind-bar-wrap { height: 5px; background: #e0d0b8; border-radius: 999px; overflow: hidden; }
-      .ind-bar      { height: 100%; border-radius: 999px; transition: width 0.5s; }
-
-      .signal-note { font-size: 0.8rem; color: #aaa; line-height: 1.6; }
-
-      /* ── challenge card ── */
-      .challenge-card {
-        width: min(640px, 100%);
-        background: var(--card);
-        border: 1.5px solid var(--border);
-        border-radius: 24px;
-        padding: 24px 26px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.07);
-        display: flex; flex-direction: column; gap: 16px;
-        color: var(--text);
-      }
-      .challenge-card.done { background: var(--green-bg); border-color: #a0d4b8; }
-      .ch-header { display: flex; align-items: center; justify-content: space-between; }
-      .ch-actions { display: flex; align-items: center; gap: 8px; }
-      .ch-title  { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-      .ch-edit   { font-size: 0.78rem; color: var(--accent); cursor: pointer; text-decoration: underline dotted; }
-      .ch-num    { font-size: 2.6rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; color: var(--accent); }
-      .ch-num.done { color: var(--green); }
-      .ch-unit   { font-size: 1rem; color: var(--muted); }
-      .ch-sub    { font-size: 0.88rem; color: var(--muted); margin-top: -4px; }
-      .ch-bar-wrap { height: 10px; background: #f0e8dc; border-radius: 999px; overflow: hidden; }
-      .ch-bar      { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #c26a27, #f0a050); transition: width 0.6s ease; }
-      .ch-bar.done { background: linear-gradient(90deg, #1a7a4a, #52c78a); }
-      .ch-row    { display: flex; gap: 10px; }
-      .ch-box    { flex: 1; background: #fdfaf6; border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
-      .ch-box-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
-      .ch-box-val   { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
-      .ch-box-val.profit { color: var(--green); }
-      .ch-box-val.loss   { color: var(--red); }
+      /* Challenge column */
+      .ch-actions { display: flex; gap: 6px; }
       .ch-btn {
-        font-size: 0.75rem; color: var(--muted); cursor: pointer;
-        border: 1px solid var(--border); border-radius: 999px;
-        padding: 4px 10px; background: #f7f0e8; transition: background .15s, color .15s; white-space: nowrap;
+        font-size: 0.78rem; padding: 4px 10px; border-radius: 14px; cursor: pointer;
+        border: 1.5px solid var(--border); background: var(--bg); color: var(--text);
+        font-family: inherit; transition: background .15s;
       }
-      .ch-btn:hover { background: #f3ebe0; color: var(--accent); }
-      .ch-btn.sync-ok  { color: var(--green); border-color: #a0d4b8; background: var(--green-bg); }
-      .ch-btn.sync-err { color: var(--red); border-color: #f0b8b8; background: var(--red-bg); }
-      .ch-sync-err-msg { font-size: 0.78rem; color: var(--red); background: var(--red-bg); border: 1px solid #f0b8b8; border-radius: 10px; padding: 8px 12px; line-height: 1.6; word-break: break-all; }
-      .ch-config { display: none; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
-      .ch-config.open { display: flex; }
-      .ch-config-note { font-size: 0.75rem; color: var(--red); line-height: 1.5; }
-      .ch-config-row { display: flex; align-items: center; gap: 10px; }
-      .ch-config-row label { font-size: 0.83rem; color: var(--muted); white-space: nowrap; min-width: 70px; }
-      .ch-config-row input {
-        flex: 1; background: #fdfaf6; border: 1.5px solid var(--border);
-        border-radius: 10px; padding: 8px 12px; color: var(--text); font: inherit; font-size: 0.9rem;
-        -moz-appearance: textfield; transition: border-color .15s;
+      .ch-btn:hover { background: var(--border); }
+      .ch-big-num { font-size: 2.2rem; font-weight: 800; color: var(--accent); line-height: 1.1; transition: color .3s; }
+      .ch-big-num.done { color: var(--green); }
+      .ch-target { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+      .ch-sub { font-size: 0.8rem; color: var(--muted); }
+      .ch-bar-wrap { height: 7px; background: #e8e0d4; border-radius: 4px; overflow: hidden; }
+      .ch-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width .4s; }
+      .ch-bar.done { background: var(--green); }
+      .ch-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+      .ch-box { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
+      .ch-box-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 3px; }
+      .ch-box-val { font-size: 0.9rem; font-weight: 700; }
+      .ch-sync-err-msg {
+        background: var(--red-bg); border: 1.5px solid var(--red);
+        border-radius: 9px; padding: 8px 10px;
+        font-size: 0.78rem; color: var(--red); white-space: pre-wrap; word-break: break-all;
       }
-      .ch-config-row input::-webkit-outer-spin-button,
-      .ch-config-row input::-webkit-inner-spin-button { -webkit-appearance: none; }
-      .ch-config-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(194,106,39,0.1); }
-      .ch-save-btn {
-        background: var(--accent); color: #fff; border: none; border-radius: 10px;
-        padding: 9px 16px; font: inherit; font-size: .88rem; cursor: pointer; font-weight: 600;
-        transition: opacity .15s;
+      .ch-trades-title { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+      .ch-trades { display: flex; flex-direction: column; gap: 5px; }
+      .ch-trade-row {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 0.78rem; padding: 5px 8px; background: var(--bg); border-radius: 7px;
       }
-      .ch-save-btn:hover { opacity: .88; }
-      .ch-proxy-help { font-size: 0.78rem; color: var(--muted); background: #fdfaf6; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; line-height: 1.7; }
-      .ch-proxy-help summary { cursor: pointer; color: var(--accent); font-weight: 600; user-select: none; }
-      .ch-proxy-help pre { margin-top: 8px; background: #f0ece4; border-radius: 8px; padding: 10px; font-size: 0.72rem; overflow-x: auto; white-space: pre; color: #333; line-height: 1.5; }
-      .ch-trade-row { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; padding: 7px 10px; background: #fdfaf6; border: 1px solid var(--border); border-radius: 9px; }
       .ch-trade-side { font-weight: 700; }
-      .ch-trade-side.buy  { color: var(--green); }
+      .ch-trade-side.buy { color: var(--green); }
       .ch-trade-side.sell { color: var(--red); }
-      .ch-trade-info { color: var(--muted); }
-      .ch-trades-title { font-size: .75rem; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+      .col.done { border-color: var(--green); }
+      .col.done .col-header { background: var(--green-bg); }
 
-      /* extra result rows */
-      .result-extra { display: flex; gap: 10px; }
-      .result-mini  {
-        flex: 1; border-radius: 14px; padding: 14px 14px;
-        display: flex; flex-direction: column; gap: 4px;
-        border: 1.5px solid var(--border); background: #fdfaf6;
+      /* Calculator column */
+      .calc-label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 5px; }
+      .input-wrap {
+        display: flex; align-items: center;
+        border: 1.5px solid var(--border); border-radius: 10px; overflow: hidden;
+        background: var(--bg); transition: border-color .15s;
       }
-      .result-mini.stop { border-color: #f0b8b8; background: #fff5f5; }
-      .result-mini.tgt  { border-color: #a8ddc0; background: #f0faf5; }
-      .result-mini-label { font-size: 0.78rem; color: var(--muted); }
-      .result-mini-val   { font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .input-wrap:focus-within { border-color: var(--accent); }
+      .input-wrap input {
+        flex: 1; border: none; background: transparent; padding: 8px 10px;
+        font-size: 0.95rem; color: var(--text); font-family: inherit; outline: none;
+      }
+      .input-unit { padding: 8px 10px 8px 0; font-size: 0.8rem; color: var(--muted); }
+      .fee-toggle { font-size: 0.8rem; color: var(--accent); cursor: pointer; user-select: none; }
+      .fee-section { display: flex; flex-direction: column; gap: 6px; }
+      .fee-section.hidden { display: none; }
+      .fee-row { display: flex; gap: 8px; }
+      .fee-note { font-size: 0.72rem; color: var(--muted); }
+      .result-box {
+        background: var(--bg); border: 1.5px solid var(--border); border-radius: 12px; padding: 12px 14px;
+      }
+      .result-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+      .result-price { font-size: 2rem; font-weight: 800; color: var(--accent); line-height: 1.1; }
+      .result-price sup { font-size: 0.9rem; font-weight: 400; }
+      .result-verdict { font-size: 0.82rem; margin-top: 4px; }
+      .result-verdict.ok  { color: var(--green); }
+      .result-verdict.bad { color: var(--red); }
+      .result-detail { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+      .result-extra { display: flex; gap: 8px; }
+      .result-mini { flex: 1; border-radius: 10px; padding: 10px 12px; border: 1.5px solid var(--border); }
+      .result-mini.stop { background: var(--red-bg); border-color: var(--red); }
+      .result-mini.tgt  { background: var(--green-bg); border-color: var(--green); }
+      .result-mini-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; }
+      .result-mini-val { font-size: 1rem; font-weight: 700; }
       .result-mini.stop .result-mini-val { color: var(--red); }
       .result-mini.tgt  .result-mini-val { color: var(--green); }
-      .result-mini-sub   { font-size: 0.75rem; color: var(--muted); }
+      .result-mini-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+      .formula-note { font-size: 0.72rem; color: var(--muted); }
 
-      @media (max-width: 480px) {
-        .live-price { font-size: 1.6rem; }
-        .card { padding: 20px 16px; }
-        .result-price { font-size: 1.9rem; }
-        .fee-row { flex-direction: column; }
-        .indicators { flex-wrap: wrap; }
-        .ch-row { flex-wrap: wrap; }
-        .result-extra { flex-direction: column; }
+      /* Signal column */
+      .signal-refresh {
+        font-size: 0.78rem; padding: 4px 10px; border-radius: 14px;
+        border: 1.5px solid var(--border); background: var(--bg); cursor: pointer;
+        font-family: inherit; transition: background .15s;
+      }
+      .signal-refresh:hover { background: var(--border); }
+      .signal-header { display: flex; align-items: center; gap: 10px; }
+      .signal-emoji { font-size: 2rem; line-height: 1; }
+      .signal-title { font-size: 1rem; font-weight: 700; }
+      .signal-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+      .indicators { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+      .ind-box { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
+      .ind-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 3px; }
+      .ind-value { font-size: 0.88rem; font-weight: 700; margin-bottom: 4px; }
+      .ind-bar-wrap { height: 5px; background: #e8e0d4; border-radius: 3px; overflow: hidden; }
+      .ind-bar { height: 100%; border-radius: 3px; transition: width .4s; }
+      .signal-note { font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
+      #signalCard.sig-buy  { background: var(--green-bg); }
+      #signalCard.sig-no   { background: var(--red-bg); }
+      #signalCard.sig-wait { background: #fdfaf6; }
+      #signalCard.sig-buy  .signal-title { color: var(--green); }
+      #signalCard.sig-no   .signal-title { color: var(--red); }
+
+      /* Settings Modal */
+      .modal-backdrop {
+        position: fixed; inset: 0; background: rgba(0,0,0,.45);
+        display: none; align-items: center; justify-content: center; z-index: 1000;
+      }
+      .modal-backdrop.open { display: flex; }
+      .modal {
+        background: var(--card); border-radius: 18px; padding: 22px 24px;
+        width: 420px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+        display: flex; flex-direction: column; gap: 12px;
+        box-shadow: 0 8px 40px rgba(0,0,0,.18);
+      }
+      .modal-header { display: flex; align-items: center; justify-content: space-between; }
+      .modal-title { font-weight: 700; font-size: 1rem; }
+      .modal-close {
+        background: none; border: none; font-size: 1.1rem; cursor: pointer;
+        color: var(--muted); padding: 4px; border-radius: 6px; font-family: inherit;
+      }
+      .modal-close:hover { background: var(--bg); }
+      .ch-config-note {
+        background: #fff8e1; border: 1.5px solid #e6c800; border-radius: 9px;
+        padding: 9px 11px; font-size: 0.78rem; color: #7a6200; line-height: 1.5;
+      }
+      .ch-config-row { display: flex; align-items: center; gap: 10px; }
+      .ch-config-row label { font-size: 0.82rem; color: var(--muted); width: 64px; flex-shrink: 0; }
+      .ch-config-row input {
+        flex: 1; border: 1.5px solid var(--border); border-radius: 10px;
+        padding: 7px 10px; background: var(--bg); font-family: inherit;
+        font-size: 0.9rem; color: var(--text); outline: none; transition: border-color .15s;
+      }
+      .ch-config-row input:focus { border-color: var(--accent); }
+      .ch-proxy-help { font-size: 0.8rem; background: var(--bg); border-radius: 9px; padding: 10px 12px; }
+      .ch-proxy-help summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+      .ch-proxy-help pre {
+        background: #1a1a22; color: #f0e8d8; padding: 10px 12px; border-radius: 8px;
+        font-size: 0.72rem; overflow-x: auto; white-space: pre; margin-top: 8px;
+      }
+      .ch-proxy-help p { line-height: 1.6; margin-top: 4px; }
+      .ch-save-btn {
+        background: var(--accent); color: #fff; border: none; border-radius: 12px;
+        padding: 10px; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+        font-family: inherit; transition: opacity .15s; width: 100%;
+      }
+      .ch-save-btn:hover { opacity: .85; }
+
+      /* Responsive */
+      @media (max-width: 900px) {
+        html, body { overflow: auto; height: auto; }
+        .dashboard { grid-template-columns: 1fr; height: auto; overflow: visible; }
+        .col { height: auto; min-height: 200px; }
       }
     </style>
   </head>
   <body>
 
-    <div class="live-bar">
-      <div>
-        <div class="live-label">Binance BTC/USDT 实时价格</div>
-        <div class="live-price" id="livePrice">连接中...</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div class="ws-info">
-          <div class="ws-dot" id="wsDot"></div>
-          <span id="wsLabel">--</span>
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-brand">₿ BTC 工具</div>
+    <div class="topbar-divider"></div>
+    <div>
+      <div class="live-label">BTC/USDT 实时</div>
+      <div class="live-price" id="livePrice">连接中...</div>
+    </div>
+    <div class="ws-info">
+      <div class="ws-dot" id="wsDot"></div>
+      <span id="wsLabel">--</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <button class="use-price-btn" id="usePriceBtn">用当前价买入</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="dashboard">
+
+    <!-- Left: Challenge -->
+    <div class="col" id="challengeCard">
+      <div class="col-header">
+        <div class="col-title">🏆 翻倍挑战</div>
+        <div class="ch-actions">
+          <button class="ch-btn" id="chSyncBtn">🔄 同步</button>
+          <button class="ch-btn" id="chEdit">⚙️ 设置</button>
         </div>
-        <button class="use-price-btn" id="usePriceBtn">用当前价买入</button>
+      </div>
+      <div class="col-body">
+        <div class="ch-sync-err-msg" id="chSyncErrMsg" style="display:none"></div>
+        <div>
+          <div class="ch-big-num" id="chCurrentVal">--</div>
+          <div class="ch-target">目标：<span id="chTargetVal">--</span> USDT</div>
+        </div>
+        <div class="ch-sub" id="chSubText">初始化中...</div>
+        <div class="ch-bar-wrap"><div class="ch-bar" id="chBar" style="width:0%"></div></div>
+        <div class="ch-stats">
+          <div class="ch-box">
+            <div class="ch-box-label">起始资金</div>
+            <div class="ch-box-val" id="chStart">--</div>
+          </div>
+          <div class="ch-box">
+            <div class="ch-box-label">当前总值</div>
+            <div class="ch-box-val" id="chNow">--</div>
+          </div>
+          <div class="ch-box">
+            <div class="ch-box-label">盈亏</div>
+            <div class="ch-box-val" id="chPnl">--</div>
+          </div>
+          <div class="ch-box">
+            <div class="ch-box-label">距目标</div>
+            <div class="ch-box-val" id="chGap">--</div>
+          </div>
+        </div>
+        <div id="chTradesWrap" style="display:none;">
+          <div class="ch-trades-title">近期 BTC 交易</div>
+          <div class="ch-trades" id="chTrades"></div>
+        </div>
       </div>
     </div>
 
-    <!-- 挑战进度卡片 -->
-    <div class="challenge-card" id="challengeCard">
-      <div class="ch-header">
-        <div class="ch-title">🏆 我的翻倍挑战</div>
-        <div class="ch-actions">
-          <button class="ch-btn" id="chSyncBtn">🔄 同步账户</button>
-          <span class="ch-edit" id="chEdit">⚙️ 设置</span>
-        </div>
+    <!-- Center: Calculator -->
+    <div class="col">
+      <div class="col-header">
+        <div class="col-title">📊 买入计划</div>
       </div>
-      <div class="ch-sync-err-msg" id="chSyncErrMsg" style="display:none"></div>
-      <div class="ch-goal">
-        <div class="ch-num" id="chCurrentVal">--</div>
-        <div class="ch-unit">/ <span id="chTargetVal">--</span> USDT</div>
-      </div>
-      <div class="ch-sub" id="chSubText">初始化中...</div>
-      <div class="ch-bar-wrap"><div class="ch-bar" id="chBar" style="width:0%"></div></div>
-      <div class="ch-row">
-        <div class="ch-box">
-          <div class="ch-box-label">起始资金</div>
-          <div class="ch-box-val" id="chStart">--</div>
-        </div>
-        <div class="ch-box">
-          <div class="ch-box-label">当前持仓价值</div>
-          <div class="ch-box-val" id="chNow">--</div>
-        </div>
-        <div class="ch-box">
-          <div class="ch-box-label">盈亏</div>
-          <div class="ch-box-val" id="chPnl">--</div>
-        </div>
-        <div class="ch-box">
-          <div class="ch-box-label">距目标</div>
-          <div class="ch-box-val" id="chGap">--</div>
-        </div>
-      </div>
-      <div class="ch-config" id="chConfig">
-        <div class="ch-config-note">⚠️ 请仅使用「只读权限」的 API Key（不要开启提现/交易权限）。Key 只保存在你的浏览器本地，不会发到任何服务器。</div>
-        <div class="ch-config-row">
-          <label>API Key</label>
-          <input id="apiKeyInput" type="password" placeholder="粘贴 Binance API Key" autocomplete="off" />
-        </div>
-        <div class="ch-config-row">
-          <label>Secret</label>
-          <input id="apiSecretInput" type="password" placeholder="粘贴 API Secret" autocomplete="off" />
-        </div>
-        <div class="ch-config-row">
-          <label>起始资金</label>
-          <input id="chStartInput" type="number" inputmode="decimal" min="0" step="any" placeholder="首次投入的总 USDT" />
-        </div>
-        <div class="ch-config-row">
-          <label>目标倍数</label>
-          <input id="chMultInput" type="number" inputmode="decimal" min="1" step="0.1" placeholder="2" />
-        </div>
-        <div class="ch-config-row">
-          <label>止损 %</label>
-          <input id="chStopInput" type="number" inputmode="decimal" min="1" max="50" step="1" placeholder="15" />
-        </div>
-        <div class="ch-config-row">
-          <label>代理地址</label>
-          <div style="display:flex;align-items:center;flex:1;background:#fdfaf6;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .15s" id="proxyWrap">
-            <span style="padding:8px 0 8px 12px;color:var(--muted);font-size:0.9rem;white-space:nowrap;user-select:none">https://</span>
-            <input id="proxyInput" type="text" placeholder="xxx.workers.dev" autocomplete="off"
-              style="flex:1;background:transparent;border:none;padding:8px 12px 8px 2px;color:var(--text);font:inherit;font-size:0.9rem;outline:none" />
+      <div class="col-body">
+        <div>
+          <label class="calc-label" for="buyPrice">买入价格（USDT）</label>
+          <div class="input-wrap">
+            <input id="buyPrice" type="number" inputmode="decimal" min="0" step="any" placeholder="例如 77000" />
+            <span class="input-unit">USDT</span>
           </div>
         </div>
-        <details class="ch-proxy-help">
-          <summary>❓ 为什么需要代理？如何免费部署？</summary>
-          <div style="margin-top:8px">
-            <p>从网页调用 Binance API 需要携带自定义 Header，浏览器的同源策略会先发 CORS 预检请求，而 Binance 不允许所有来源跨域访问带 Header 的接口。</p>
-            <p style="margin-top:6px">解决方法：免费部署一个 <strong>Cloudflare Worker</strong> 作为中转（每天 10 万次免费）：</p>
-            <ol style="margin:6px 0 8px 16px;line-height:1.9">
-              <li>注册 <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--accent)">Cloudflare Workers</a>（免费）</li>
-              <li>新建 Worker，把下面代码全部粘贴进去，点「保存并部署」</li>
-              <li>验证：在浏览器打开 <code>https://你的worker地址/api/v3/ping</code>，应返回 <code>{}</code></li>
-              <li>把 Worker 的 URL（如 <code>https://xxx.workers.dev</code>）填到上面「代理地址」框里</li>
-            </ol>
-            <pre>export default {
+        <div>
+          <label class="calc-label" for="amount">投入金额（USDT）</label>
+          <div class="input-wrap">
+            <input id="amount" type="number" inputmode="decimal" min="0" step="any" placeholder="例如 1000" />
+            <span class="input-unit">USDT</span>
+          </div>
+        </div>
+        <div>
+          <span class="fee-toggle" id="feeToggle">▸ 手续费设置（默认 0.1%）</span>
+          <div class="fee-section hidden" id="feeSection" style="margin-top:8px">
+            <div class="fee-row">
+              <div class="input-wrap">
+                <input id="buyFeeRate" type="number" inputmode="decimal" min="0" step="any" placeholder="买入费率" />
+                <span class="input-unit">%</span>
+              </div>
+              <div class="input-wrap">
+                <input id="sellFeeRate" type="number" inputmode="decimal" min="0" step="any" placeholder="卖出费率" />
+                <span class="input-unit">%</span>
+              </div>
+            </div>
+            <div class="fee-note">普通用户 0.1%，BNB 抵扣约 0.075%</div>
+          </div>
+        </div>
+        <div class="result-box" id="resultBox">
+          <div class="result-label">卖出不亏的最低价格</div>
+          <div class="result-price" id="resultPrice"><sup>USDT </sup>--</div>
+          <div class="result-verdict" id="resultVerdict" style="display:none;"></div>
+          <div class="result-detail" id="resultDetail"></div>
+        </div>
+        <div class="result-extra" id="resultExtra" style="display:none;">
+          <div class="result-mini stop">
+            <div class="result-mini-label">🛑 止损价（亏 <span id="stopPctLabel">15</span>%）</div>
+            <div class="result-mini-val" id="stopPriceVal">--</div>
+            <div class="result-mini-sub" id="stopPriceSub"></div>
+          </div>
+          <div class="result-mini tgt">
+            <div class="result-mini-label">🎯 翻倍目标卖价</div>
+            <div class="result-mini-val" id="targetPriceVal">--</div>
+            <div class="result-mini-sub" id="targetPriceSub"></div>
+          </div>
+        </div>
+        <div class="formula-note" id="formulaNote"></div>
+      </div>
+    </div>
+
+    <!-- Right: Signal -->
+    <div class="col">
+      <div class="col-header">
+        <div class="col-title">📡 买入信号</div>
+        <button class="signal-refresh" id="signalRefresh">刷新</button>
+      </div>
+      <div class="col-body" id="signalCard">
+        <div class="signal-header">
+          <div class="signal-emoji" id="signalEmoji">⏳</div>
+          <div>
+            <div class="signal-title" id="signalTitle">分析中...</div>
+            <div class="signal-sub" id="signalSub">正在获取 Binance 数据</div>
+          </div>
+        </div>
+        <div class="indicators">
+          <div class="ind-box">
+            <div class="ind-label">RSI(14)</div>
+            <div class="ind-value" id="indRsiVal">--</div>
+            <div class="ind-bar-wrap"><div class="ind-bar" id="indRsiBar" style="width:0%;background:#ccc"></div></div>
+          </div>
+          <div class="ind-box">
+            <div class="ind-label">MACD 趋势</div>
+            <div class="ind-value" id="indMacdVal">--</div>
+            <div class="ind-bar-wrap"><div class="ind-bar" id="indMacdBar" style="width:50%;background:#ccc"></div></div>
+          </div>
+          <div class="ind-box">
+            <div class="ind-label">价格 vs MA20</div>
+            <div class="ind-value" id="indMaVal">--</div>
+            <div class="ind-bar-wrap"><div class="ind-bar" id="indMaBar" style="width:50%;background:#ccc"></div></div>
+          </div>
+          <div class="ind-box">
+            <div class="ind-label">24h 涨跌幅</div>
+            <div class="ind-value" id="indChgVal">--</div>
+            <div class="ind-bar-wrap"><div class="ind-bar" id="indChgBar" style="width:50%;background:#ccc"></div></div>
+          </div>
+        </div>
+        <div class="signal-note" id="signalNote"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">⚙️ 账户与挑战设置</div>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div class="ch-config-note">⚠️ 请仅使用「只读权限」的 API Key（不开启提现/交易权限）。Key 只保存在浏览器本地，不发到任何服务器。</div>
+      <div class="ch-config-row">
+        <label>API Key</label>
+        <input id="apiKeyInput" type="password" placeholder="粘贴 Binance API Key" autocomplete="off" />
+      </div>
+      <div class="ch-config-row">
+        <label>Secret</label>
+        <input id="apiSecretInput" type="password" placeholder="粘贴 API Secret" autocomplete="off" />
+      </div>
+      <div class="ch-config-row">
+        <label>起始资金</label>
+        <input id="chStartInput" type="number" inputmode="decimal" min="0" step="any" placeholder="首次投入的总 USDT" />
+      </div>
+      <div class="ch-config-row">
+        <label>目标倍数</label>
+        <input id="chMultInput" type="number" inputmode="decimal" min="1" step="0.1" placeholder="2" />
+      </div>
+      <div class="ch-config-row">
+        <label>止损 %</label>
+        <input id="chStopInput" type="number" inputmode="decimal" min="1" max="50" step="1" placeholder="15" />
+      </div>
+      <div class="ch-config-row">
+        <label>代理地址</label>
+        <div style="display:flex;align-items:center;flex:1;background:#fdfaf6;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;" id="proxyWrap">
+          <span style="padding:8px 0 8px 12px;color:var(--muted);font-size:0.9rem;white-space:nowrap;user-select:none">https://</span>
+          <input id="proxyInput" type="text" placeholder="xxx.workers.dev" autocomplete="off"
+            style="flex:1;background:transparent;border:none;padding:8px 12px 8px 2px;color:var(--text);font:inherit;font-size:0.9rem;outline:none" />
+        </div>
+      </div>
+      <details class="ch-proxy-help">
+        <summary>❓ 为什么需要代理？如何免费部署？</summary>
+        <div style="margin-top:8px">
+          <p>Binance 不允许带自定义 Header 的跨域请求。解决方法：部署免费 <strong>Cloudflare Worker</strong> 中转：</p>
+          <ol style="margin:6px 0 8px 16px;line-height:1.9">
+            <li>注册 <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--accent)">Cloudflare Workers</a>（免费）</li>
+            <li>新建 Worker，粘贴下面代码，点「保存并部署」</li>
+            <li>验证：浏览器打开 <code>https://你的worker地址/api/v3/ping</code>，应返回 <code>{}</code></li>
+            <li>将 Worker 域名填到上面「代理地址」框</li>
+          </ol>
+          <pre>export default {
   async fetch(request) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: {
@@ -430,12 +459,9 @@
     }
     const url = new URL(request.url);
     const target = 'https://api.binance.com' + url.pathname + url.search;
-
-    // 只转发 API Key，不转发 Host 等可能引起 404 的浏览器 header
     const headers = new Headers();
     const apiKey = request.headers.get('X-MBX-APIKEY');
     if (apiKey) headers.set('X-MBX-APIKEY', apiKey);
-
     const res = await fetch(target, { method: request.method, headers });
     const body = await res.text();
     return new Response(body, {
@@ -448,123 +474,11 @@
     });
   }
 };</pre>
-          </div>
-        </details>
-        <button class="ch-save-btn" id="chSaveBtn">保存并同步</button>
-      </div>
-      <div id="chTradesWrap" style="display:none;">
-        <div class="ch-trades-title" style="margin-bottom:8px;">近期 BTC 交易</div>
-        <div class="ch-trades" id="chTrades"></div>
-      </div>
+        </div>
+      </details>
+      <button class="ch-save-btn" id="chSaveBtn">保存并同步</button>
     </div>
-
-    <div class="signal-card" id="signalCard">
-      <div class="signal-header">
-        <div class="signal-emoji" id="signalEmoji">⏳</div>
-        <div class="signal-main">
-          <div class="signal-title" id="signalTitle">分析中...</div>
-          <div class="signal-sub"  id="signalSub">正在获取 Binance 数据</div>
-        </div>
-        <button class="signal-refresh" id="signalRefresh">刷新</button>
-      </div>
-      <div class="indicators">
-        <div class="ind-box">
-          <div class="ind-label">RSI(14)</div>
-          <div class="ind-value" id="indRsiVal">--</div>
-          <div class="ind-bar-wrap"><div class="ind-bar" id="indRsiBar" style="width:0%;background:#ccc"></div></div>
-        </div>
-        <div class="ind-box">
-          <div class="ind-label">MACD 趋势</div>
-          <div class="ind-value" id="indMacdVal">--</div>
-          <div class="ind-bar-wrap"><div class="ind-bar" id="indMacdBar" style="width:50%;background:#ccc"></div></div>
-        </div>
-        <div class="ind-box">
-          <div class="ind-label">价格 vs MA20</div>
-          <div class="ind-value" id="indMaVal">--</div>
-          <div class="ind-bar-wrap"><div class="ind-bar" id="indMaBar" style="width:50%;background:#ccc"></div></div>
-        </div>
-        <div class="ind-box">
-          <div class="ind-label">24h 涨跌幅</div>
-          <div class="ind-value" id="indChgVal">--</div>
-          <div class="ind-bar-wrap"><div class="ind-bar" id="indChgBar" style="width:50%;background:#ccc"></div></div>
-        </div>
-      </div>
-      <div class="signal-note" id="signalNote"></div>
-    </div>
-
-    <div class="card">
-      <div>
-        <div class="card-title">我的买入计划</div>
-        <div class="card-subtitle">填好下面三步，马上告诉你卖到多少才不亏</div>
-      </div>
-
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-body">
-            <label for="buyPrice">我打算在这个价格买入（USDT）</label>
-            <div class="input-wrap">
-              <input id="buyPrice" type="number" inputmode="decimal" min="0" step="any" placeholder="例如 77000" />
-              <span class="input-unit">USDT</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-body">
-            <label for="amount">我准备花这么多钱买（USDT）</label>
-            <div class="input-wrap">
-              <input id="amount" type="number" inputmode="decimal" min="0" step="any" placeholder="例如 1000" />
-              <span class="input-unit">USDT</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="step-num">3</div>
-          <div class="step-body">
-            <label>手续费（不确定可以用默认值）</label>
-            <span class="fee-toggle" id="feeToggle">▸ 展开手续费设置（默认：买入 0.1% · 卖出 0.1%）</span>
-            <div class="fee-section hidden" id="feeSection">
-              <div class="fee-row">
-                <div class="input-wrap">
-                  <input id="buyFeeRate" type="number" inputmode="decimal" min="0" step="any" placeholder="买入手续费率" />
-                  <span class="input-unit">%</span>
-                </div>
-                <div class="input-wrap">
-                  <input id="sellFeeRate" type="number" inputmode="decimal" min="0" step="any" placeholder="卖出手续费率" />
-                  <span class="input-unit">%</span>
-                </div>
-              </div>
-              <div class="fee-note">Binance 现货普通用户一般是 0.1%，用 BNB 抵扣约 0.075%</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="result-box" id="resultBox">
-        <div class="result-label">卖出不亏的最低价格</div>
-        <div class="result-price" id="resultPrice"><sup>USDT </sup>--</div>
-        <div class="result-verdict" id="resultVerdict" style="display:none;"></div>
-        <div class="result-detail" id="resultDetail"></div>
-      </div>
-
-      <div class="result-extra" id="resultExtra" style="display:none;">
-        <div class="result-mini stop">
-          <div class="result-mini-label">🛑 止损价（最多亏 <span id="stopPctLabel">15</span>%）</div>
-          <div class="result-mini-val" id="stopPriceVal">--</div>
-          <div class="result-mini-sub" id="stopPriceSub"></div>
-        </div>
-        <div class="result-mini tgt">
-          <div class="result-mini-label">🎯 翻倍目标卖价</div>
-          <div class="result-mini-val" id="targetPriceVal">--</div>
-          <div class="result-mini-sub" id="targetPriceSub"></div>
-        </div>
-      </div>
-
-      <div class="formula-note" id="formulaNote"></div>
-    </div>
+  </div>
 
     <script>
       const BINANCE_WS  = "wss://stream.binance.com:9443/ws/btcusdt@trade";
@@ -590,7 +504,8 @@
       const challengeCardEl = document.getElementById("challengeCard");
       const chEdit          = document.getElementById("chEdit");
       const chSyncBtn       = document.getElementById("chSyncBtn");
-      const chConfig        = document.getElementById("chConfig");
+      const settingsModal   = document.getElementById("settingsModal");
+      const modalClose      = document.getElementById("modalClose");
       const chSaveBtn       = document.getElementById("chSaveBtn");
       const apiKeyInput     = document.getElementById("apiKeyInput");
       const apiSecretInput  = document.getElementById("apiSecretInput");
@@ -770,6 +685,7 @@
         if (pv > 0 && pv <= 50) { chStopPct = pv; LS.set("stop", pv); }
         updateChallenge(); calculate();
         if (k && s) syncAccount();
+        settingsModal.classList.remove("open");
       });
 
       function saveChConfig() {
@@ -786,8 +702,13 @@
       [chStartInput, chMultInput, chStopInput].forEach(el => el.addEventListener("input", saveChConfig));
 
       chEdit.addEventListener("click", () => {
-        const open = chConfig.classList.toggle("open");
-        chEdit.textContent = open ? "收起" : "修改设置";
+        settingsModal.classList.add("open");
+      });
+      modalClose.addEventListener("click", () => {
+        settingsModal.classList.remove("open");
+      });
+      settingsModal.addEventListener("click", (e) => {
+        if (e.target === settingsModal) settingsModal.classList.remove("open");
       });
 
       function updateChallenge() {
@@ -830,10 +751,10 @@
           const gap      = target ? target - totalNow : 0;
 
           chCurrentValEl.textContent = fmt(totalNow);
-          chCurrentValEl.className   = "ch-num" + (target && totalNow >= target ? " done" : "");
+          chCurrentValEl.className   = "ch-big-num" + (target && totalNow >= target ? " done" : "");
           chBarEl.style.width        = progress + "%";
           chBarEl.className          = "ch-bar" + (target && totalNow >= target ? " done" : "");
-          challengeCardEl.className  = "challenge-card" + (target && totalNow >= target ? " done" : "");
+          challengeCardEl.classList.toggle("done", !!(target && totalNow >= target));
 
           const chPnlEl2 = document.getElementById("chPnl");
           const chGapEl2 = document.getElementById("chGap");
