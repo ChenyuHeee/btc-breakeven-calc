@@ -402,7 +402,11 @@
         </div>
         <div class="ch-config-row">
           <label>代理地址</label>
-          <input id="proxyInput" type="url" placeholder="https://your-worker.workers.dev（解决CORS用）" autocomplete="off" />
+          <div style="display:flex;align-items:center;flex:1;background:#fdfaf6;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .15s" id="proxyWrap">
+            <span style="padding:8px 0 8px 12px;color:var(--muted);font-size:0.9rem;white-space:nowrap;user-select:none">https://</span>
+            <input id="proxyInput" type="text" placeholder="xxx.workers.dev" autocomplete="off"
+              style="flex:1;background:transparent;border:none;padding:8px 12px 8px 2px;color:var(--text);font:inherit;font-size:0.9rem;outline:none" />
+          </div>
         </div>
         <details class="ch-proxy-help">
           <summary>❓ 为什么需要代理？如何免费部署？</summary>
@@ -628,7 +632,7 @@
       // Restore API keys
       apiKeyInput.value    = LS.get("apiKey")    || "";
       apiSecretInput.value = LS.get("apiSecret") || "";
-      proxyInput.value     = LS.get("proxy")     || "";
+      proxyInput.value     = (LS.get("proxy") || "").replace(/^https?:\/\//, "");
       if (chStartVal !== null) chStartInput.value = chStartVal;
       chMultInput.value = chMultVal;
       chStopInput.value = chStopPct;
@@ -753,12 +757,13 @@
         if (k) LS.set("apiKey", k);
         if (s) LS.set("apiSecret", s);
         const pxy = proxyInput.value.trim();
-        if (pxy && (!pxy.startsWith("https://") || pxy.includes("github.io"))) {
+        const pxyFull = pxy ? "https://" + pxy.replace(/^https?:\/\//, "") : "";
+        if (pxyFull && pxyFull.includes("github.io")) {
           const errEl = document.getElementById("chSyncErrMsg");
-          if (errEl) { errEl.style.display = "block"; errEl.textContent = "⚠️ 代理地址格式不对，应为 Cloudflare Worker 地址（https://xxx.workers.dev），请重新填写"; }
+          if (errEl) { errEl.style.display = "block"; errEl.textContent = "⚠️ 代理地址格式不对，应为 Cloudflare Worker 地址（xxx.workers.dev），请重新填写"; }
           return;
         }
-        LS.set("proxy", pxy || null);
+        LS.set("proxy", pxyFull || null);
         const sv = parseFloat(chStartInput.value), mv = parseFloat(chMultInput.value), pv = parseFloat(chStopInput.value);
         if (sv > 0)  { chStartVal = sv; LS.set("start", sv); }
         if (mv >= 1) { chMultVal  = mv; LS.set("mult",  mv); }
