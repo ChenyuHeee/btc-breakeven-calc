@@ -238,64 +238,67 @@
       /* ── challenge card ── */
       .challenge-card {
         width: min(640px, 100%);
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border: 1.5px solid #2a2a4a;
+        background: var(--card);
+        border: 1.5px solid var(--border);
         border-radius: 24px;
         padding: 24px 26px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.07);
         display: flex; flex-direction: column; gap: 16px;
-        color: #fff;
+        color: var(--text);
       }
-      .challenge-card.done { background: linear-gradient(135deg, #0f3d2a 0%, #1a5e3a 100%); border-color: #2a8a5a; }
+      .challenge-card.done { background: var(--green-bg); border-color: #a0d4b8; }
       .ch-header { display: flex; align-items: center; justify-content: space-between; }
       .ch-actions { display: flex; align-items: center; gap: 8px; }
-      .ch-title  { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #aaa; }
-      .ch-edit   { font-size: 0.78rem; color: #888; cursor: pointer; text-decoration: underline dotted; }
-      .ch-num    { font-size: 2.6rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
-      .ch-num.done { color: #4ade80; }
-      .ch-unit   { font-size: 1rem; color: #aaa; }
-      .ch-sub    { font-size: 0.88rem; color: #aaa; margin-top: -4px; }
-      .ch-bar-wrap { height: 10px; background: rgba(255,255,255,0.1); border-radius: 999px; overflow: hidden; }
+      .ch-title  { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+      .ch-edit   { font-size: 0.78rem; color: var(--accent); cursor: pointer; text-decoration: underline dotted; }
+      .ch-num    { font-size: 2.6rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; color: var(--accent); }
+      .ch-num.done { color: var(--green); }
+      .ch-unit   { font-size: 1rem; color: var(--muted); }
+      .ch-sub    { font-size: 0.88rem; color: var(--muted); margin-top: -4px; }
+      .ch-bar-wrap { height: 10px; background: #f0e8dc; border-radius: 999px; overflow: hidden; }
       .ch-bar      { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #c26a27, #f0a050); transition: width 0.6s ease; }
-      .ch-bar.done { background: linear-gradient(90deg, #1a7a4a, #4ade80); }
+      .ch-bar.done { background: linear-gradient(90deg, #1a7a4a, #52c78a); }
       .ch-row    { display: flex; gap: 10px; }
-      .ch-box    { flex: 1; background: rgba(255,255,255,0.06); border-radius: 14px; padding: 12px 14px; }
-      .ch-box-label { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
-      .ch-box-val   { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-      .ch-box-val.profit { color: #4ade80; }
-      .ch-box-val.loss   { color: #f87171; }
+      .ch-box    { flex: 1; background: #fdfaf6; border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
+      .ch-box-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
+      .ch-box-val   { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+      .ch-box-val.profit { color: var(--green); }
+      .ch-box-val.loss   { color: var(--red); }
       .ch-btn {
-        font-size: 0.75rem; color: #888; cursor: pointer;
-        border: 1px solid rgba(255,255,255,0.15); border-radius: 999px;
-        padding: 4px 10px; background: rgba(255,255,255,0.05); transition: background .15s; white-space: nowrap;
+        font-size: 0.75rem; color: var(--muted); cursor: pointer;
+        border: 1px solid var(--border); border-radius: 999px;
+        padding: 4px 10px; background: #f7f0e8; transition: background .15s, color .15s; white-space: nowrap;
       }
-      .ch-btn:hover { background: rgba(255,255,255,.12); }
-      .ch-btn.sync-ok  { color: #4ade80; border-color: #2a5a3a; }
-      .ch-btn.sync-err { color: #f87171; }
-      .ch-config { display: none; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.08); }
+      .ch-btn:hover { background: #f3ebe0; color: var(--accent); }
+      .ch-btn.sync-ok  { color: var(--green); border-color: #a0d4b8; background: var(--green-bg); }
+      .ch-btn.sync-err { color: var(--red); border-color: #f0b8b8; background: var(--red-bg); }
+      .ch-sync-err-msg { font-size: 0.78rem; color: var(--red); background: var(--red-bg); border: 1px solid #f0b8b8; border-radius: 10px; padding: 8px 12px; line-height: 1.6; word-break: break-all; }
+      .ch-config { display: none; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
       .ch-config.open { display: flex; }
-      .ch-config-note { font-size: 0.75rem; color: #f87171; line-height: 1.5; }
+      .ch-config-note { font-size: 0.75rem; color: var(--red); line-height: 1.5; }
       .ch-config-row { display: flex; align-items: center; gap: 10px; }
-      .ch-config-row label { font-size: 0.83rem; color: #aaa; white-space: nowrap; min-width: 70px; }
+      .ch-config-row label { font-size: 0.83rem; color: var(--muted); white-space: nowrap; min-width: 70px; }
       .ch-config-row input {
-        flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 10px; padding: 8px 12px; color: #fff; font: inherit; font-size: 0.9rem;
-        -moz-appearance: textfield;
+        flex: 1; background: #fdfaf6; border: 1.5px solid var(--border);
+        border-radius: 10px; padding: 8px 12px; color: var(--text); font: inherit; font-size: 0.9rem;
+        -moz-appearance: textfield; transition: border-color .15s;
       }
       .ch-config-row input::-webkit-outer-spin-button,
       .ch-config-row input::-webkit-inner-spin-button { -webkit-appearance: none; }
-      .ch-config-row input:focus { outline: none; border-color: var(--accent); }
+      .ch-config-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(194,106,39,0.1); }
       .ch-save-btn {
         background: var(--accent); color: #fff; border: none; border-radius: 10px;
         padding: 9px 16px; font: inherit; font-size: .88rem; cursor: pointer; font-weight: 600;
+        transition: opacity .15s;
       }
+      .ch-save-btn:hover { opacity: .88; }
       .ch-trades { display: flex; flex-direction: column; gap: 6px; }
-      .ch-trade-row { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; padding: 7px 10px; background: rgba(255,255,255,.05); border-radius: 9px; }
+      .ch-trade-row { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; padding: 7px 10px; background: #fdfaf6; border: 1px solid var(--border); border-radius: 9px; }
       .ch-trade-side { font-weight: 700; }
-      .ch-trade-side.buy  { color: #4ade80; }
-      .ch-trade-side.sell { color: #f87171; }
-      .ch-trade-info { color: #aaa; }
-      .ch-trades-title { font-size: .75rem; color: #888; letter-spacing: .05em; text-transform: uppercase; }
+      .ch-trade-side.buy  { color: var(--green); }
+      .ch-trade-side.sell { color: var(--red); }
+      .ch-trade-info { color: var(--muted); }
+      .ch-trades-title { font-size: .75rem; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
 
       /* extra result rows */
       .result-extra { display: flex; gap: 10px; }
@@ -348,6 +351,7 @@
           <span class="ch-edit" id="chEdit">⚙️ 设置</span>
         </div>
       </div>
+      <div class="ch-sync-err-msg" id="chSyncErrMsg" style="display:none"></div>
       <div class="ch-goal">
         <div class="ch-num" id="chCurrentVal">--</div>
         <div class="ch-unit">/ <span id="chTargetVal">--</span> USDT</div>
@@ -633,9 +637,16 @@
           updateChallenge();
           chSyncBtn.textContent = "✅ 已同步"; chSyncBtn.className = "ch-btn sync-ok";
           setTimeout(() => { chSyncBtn.textContent = "🔄 同步账户"; chSyncBtn.className = "ch-btn"; }, 3000);
+          const errEl = document.getElementById("chSyncErrMsg");
+          if (errEl) errEl.style.display = "none";
         } catch (e) {
-          chSyncBtn.textContent = "❌ " + (e.message || "失败"); chSyncBtn.className = "ch-btn sync-err";
+          chSyncBtn.textContent = "❌ 同步失败"; chSyncBtn.className = "ch-btn sync-err";
           setTimeout(() => { chSyncBtn.textContent = "🔄 同步账户"; chSyncBtn.className = "ch-btn"; }, 4000);
+          const errEl = document.getElementById("chSyncErrMsg");
+          if (errEl) {
+            errEl.style.display = "block";
+            errEl.textContent = "⚠️ 错误详情：" + (e.message || String(e));
+          }
         }
       }
 
