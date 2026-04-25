@@ -605,35 +605,38 @@
         try {
           res = await fetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
         } catch (networkErr) {
-          // 先测试公开接口连通性
+          // 步骤1：测试公开接口（无自定义 header）是否可达
           let pingOk = false;
           try {
             const ping = await fetch(BINANCE_API + "/api/v3/ping", { signal: AbortSignal.timeout(5000) });
             pingOk = ping.ok;
           } catch (_) {}
 
-          // 再测试 CORS：不带自定义 header 访问公开接口
-          let corsHdrOk = false;
-          if (pingOk) {
-            try {
-              const r = await fetch(BINANCE_API + "/api/v3/time", { signal: AbortSignal.timeout(5000) });
-              corsHdrOk = r.ok;
-            } catch (_) {}
+          if (!pingOk) {
+            throw new Error("网络无法连接 Binance API，请检查 VPN / 代理是否对浏览器生效");
           }
 
-          if (!pingOk) {
-            throw new Error("网络无法连接 Binance API（请检查 VPN / 代理是否对浏览器生效）");
+          // 步骤2：带 X-MBX-APIKEY header 请求公开接口，测试 CORS preflight 是否通过
+          let hdrOk = false;
+          try {
+            await fetch(BINANCE_API + "/api/v3/ping", {
+              headers: { "X-MBX-APIKEY": apiKey },
+              signal: AbortSignal.timeout(5000)
+            });
+            hdrOk = true;
+          } catch (_) {}
+
+          if (!hdrOk) {
+            throw new Error(
+              "CORS 预检失败：浏览器发送 X-MBX-APIKEY 自定义 Header 前须先发 OPTIONS 预检请求，" +
+              "当前页面来源（" + location.origin + "）被 Binance 服务器拒绝了跨域访问。\n" +
+              "解决方法：将本 HTML 文件下载后用浏览器直接打开（file:// 协议无跨域限制），" +
+              "或将文件放到本地 HTTP 服务器运行。\n" +
+              "原始错误：" + networkErr.message
+            );
           }
-          // 公开接口通了，但加了 X-MBX-APIKEY 自定义 header 后失败
-          // 最常见原因：API Key 在 Binance 控制台设置了 IP 白名单，当前 IP 不在列表内
-          throw new Error(
-            "Binance 公开接口可访问，但签名请求失败（Load failed）。\n" +
-            "最可能的原因：\n" +
-            "① API Key 在 Binance 后台设置了「受信任 IP」白名单，当前 VPN 出口 IP 不在其中\n" +
-            "   → 请到 Binance → 账户 → API 管理，将该 Key 的「访问限制」改为「不限制访问 IP」\n" +
-            "② API Key 权限不含「读取」权限\n" +
-            "原始错误：" + networkErr.message
-          );
+
+          throw new Error("公开接口和 Header 均正常，但签名请求失败：" + networkErr.message);
         }
         if (!res.ok) {
           const e = await res.json().catch(() => ({}));
