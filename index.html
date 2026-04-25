@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BTC 回本计算器</title>
+    <title>BTC 翻倍挑战</title>
     <style>
       :root {
         --bg: #f5f0e8;
@@ -235,12 +235,71 @@
 
       .signal-note { font-size: 0.8rem; color: #aaa; line-height: 1.6; }
 
+      /* ── challenge card ── */
+      .challenge-card {
+        width: min(640px, 100%);
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 1.5px solid #2a2a4a;
+        border-radius: 24px;
+        padding: 24px 26px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        display: flex; flex-direction: column; gap: 16px;
+        color: #fff;
+      }
+      .challenge-card.done { background: linear-gradient(135deg, #0f3d2a 0%, #1a5e3a 100%); border-color: #2a8a5a; }
+      .ch-header { display: flex; align-items: center; justify-content: space-between; }
+      .ch-title  { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #aaa; }
+      .ch-edit   { font-size: 0.78rem; color: #888; cursor: pointer; text-decoration: underline dotted; }
+      .ch-goal   { display: flex; align-items: baseline; gap: 8px; }
+      .ch-num    { font-size: 2.6rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+      .ch-num.done { color: #4ade80; }
+      .ch-unit   { font-size: 1rem; color: #aaa; }
+      .ch-sub    { font-size: 0.88rem; color: #aaa; margin-top: -4px; }
+      .ch-bar-wrap { height: 10px; background: rgba(255,255,255,0.1); border-radius: 999px; overflow: hidden; }
+      .ch-bar      { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #c26a27, #f0a050); transition: width 0.6s ease; }
+      .ch-bar.done { background: linear-gradient(90deg, #1a7a4a, #4ade80); }
+      .ch-row    { display: flex; gap: 10px; }
+      .ch-box    { flex: 1; background: rgba(255,255,255,0.06); border-radius: 14px; padding: 12px 14px; }
+      .ch-box-label { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
+      .ch-box-val   { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .ch-box-val.profit { color: #4ade80; }
+      .ch-box-val.loss   { color: #f87171; }
+      .ch-config { display: none; flex-direction: column; gap: 10px; padding-top: 4px; }
+      .ch-config.open { display: flex; }
+      .ch-config-row { display: flex; align-items: center; gap: 10px; }
+      .ch-config-row label { font-size: 0.83rem; color: #aaa; white-space: nowrap; }
+      .ch-config-row input {
+        flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 10px; padding: 8px 12px; color: #fff; font: inherit; font-size: 0.95rem;
+        -moz-appearance: textfield;
+      }
+      .ch-config-row input::-webkit-outer-spin-button,
+      .ch-config-row input::-webkit-inner-spin-button { -webkit-appearance: none; }
+      .ch-config-row input:focus { outline: none; border-color: var(--accent); }
+
+      /* extra result rows */
+      .result-extra { display: flex; gap: 10px; }
+      .result-mini  {
+        flex: 1; border-radius: 14px; padding: 14px 14px;
+        display: flex; flex-direction: column; gap: 4px;
+        border: 1.5px solid var(--border); background: #fdfaf6;
+      }
+      .result-mini.stop { border-color: #f0b8b8; background: #fff5f5; }
+      .result-mini.tgt  { border-color: #a8ddc0; background: #f0faf5; }
+      .result-mini-label { font-size: 0.78rem; color: var(--muted); }
+      .result-mini-val   { font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .result-mini.stop .result-mini-val { color: var(--red); }
+      .result-mini.tgt  .result-mini-val { color: var(--green); }
+      .result-mini-sub   { font-size: 0.75rem; color: var(--muted); }
+
       @media (max-width: 480px) {
         .live-price { font-size: 1.6rem; }
         .card { padding: 20px 16px; }
         .result-price { font-size: 1.9rem; }
         .fee-row { flex-direction: column; }
         .indicators { flex-wrap: wrap; }
+        .ch-row { flex-wrap: wrap; }
+        .result-extra { flex-direction: column; }
       }
     </style>
   </head>
@@ -257,6 +316,52 @@
           <span id="wsLabel">--</span>
         </div>
         <button class="use-price-btn" id="usePriceBtn">用当前价买入</button>
+      </div>
+    </div>
+
+    <!-- 挑战进度卡片 -->
+    <div class="challenge-card" id="challengeCard">
+      <div class="ch-header">
+        <div class="ch-title">🏆 我的翻倍挑战</div>
+        <span class="ch-edit" id="chEdit">修改设置</span>
+      </div>
+      <div class="ch-goal">
+        <div class="ch-num" id="chCurrentVal">--</div>
+        <div class="ch-unit">/ <span id="chTargetVal">--</span> USDT</div>
+      </div>
+      <div class="ch-sub" id="chSubText">初始化中...</div>
+      <div class="ch-bar-wrap"><div class="ch-bar" id="chBar" style="width:0%"></div></div>
+      <div class="ch-row">
+        <div class="ch-box">
+          <div class="ch-box-label">起始资金</div>
+          <div class="ch-box-val" id="chStart">--</div>
+        </div>
+        <div class="ch-box">
+          <div class="ch-box-label">当前持仓价值</div>
+          <div class="ch-box-val" id="chNow">--</div>
+        </div>
+        <div class="ch-box">
+          <div class="ch-box-label">盈亏</div>
+          <div class="ch-box-val" id="chPnl">--</div>
+        </div>
+        <div class="ch-box">
+          <div class="ch-box-label">距目标</div>
+          <div class="ch-box-val" id="chGap">--</div>
+        </div>
+      </div>
+      <div class="ch-config" id="chConfig">
+        <div class="ch-config-row">
+          <label>起始资金</label>
+          <input id="chStartInput" type="number" inputmode="decimal" min="0" step="any" placeholder="70" />
+        </div>
+        <div class="ch-config-row">
+          <label>目标倍数</label>
+          <input id="chMultInput" type="number" inputmode="decimal" min="1" step="0.1" placeholder="2" />
+        </div>
+        <div class="ch-config-row">
+          <label>止损比例 %</label>
+          <input id="chStopInput" type="number" inputmode="decimal" min="1" max="50" step="1" placeholder="15" />
+        </div>
       </div>
     </div>
 
@@ -347,6 +452,19 @@
         <div class="result-detail" id="resultDetail"></div>
       </div>
 
+      <div class="result-extra" id="resultExtra" style="display:none;">
+        <div class="result-mini stop">
+          <div class="result-mini-label">🛑 止损价（最多亏 <span id="stopPctLabel">15</span>%）</div>
+          <div class="result-mini-val" id="stopPriceVal">--</div>
+          <div class="result-mini-sub" id="stopPriceSub"></div>
+        </div>
+        <div class="result-mini tgt">
+          <div class="result-mini-label">🎯 翻倍目标卖价</div>
+          <div class="result-mini-val" id="targetPriceVal">--</div>
+          <div class="result-mini-sub" id="targetPriceSub"></div>
+        </div>
+      </div>
+
       <div class="formula-note" id="formulaNote"></div>
     </div>
 
@@ -369,6 +487,106 @@
       const resultDetailEl  = document.getElementById("resultDetail");
       const formulaNoteEl   = document.getElementById("formulaNote");
 
+      // ── Challenge card elements ──
+      const challengeCardEl = document.getElementById("challengeCard");
+      const chEdit          = document.getElementById("chEdit");
+      const chConfig        = document.getElementById("chConfig");
+      const chStartInput    = document.getElementById("chStartInput");
+      const chMultInput     = document.getElementById("chMultInput");
+      const chStopInput     = document.getElementById("chStopInput");
+      const chCurrentValEl  = document.getElementById("chCurrentVal");
+      const chTargetValEl   = document.getElementById("chTargetVal");
+      const chSubTextEl     = document.getElementById("chSubText");
+      const chBarEl         = document.getElementById("chBar");
+      const chStartEl       = document.getElementById("chStart");
+      const chNowEl         = document.getElementById("chNow");
+      const chPnlEl         = document.getElementById("chPnl");
+      const chGapEl         = document.getElementById("chGap");
+      const resultExtraEl   = document.getElementById("resultExtra");
+      const stopPctLabelEl  = document.getElementById("stopPctLabel");
+      const stopPriceValEl  = document.getElementById("stopPriceVal");
+      const stopPriceSubEl  = document.getElementById("stopPriceSub");
+      const targetPriceValEl= document.getElementById("targetPriceVal");
+      const targetPriceSubEl= document.getElementById("targetPriceSub");
+
+      // ── Persisted config ──
+      const LS = {
+        get: k => { try { return JSON.parse(localStorage.getItem("btc_" + k)); } catch { return null; } },
+        set: (k, v) => localStorage.setItem("btc_" + k, JSON.stringify(v))
+      };
+
+      let chStartVal = LS.get("start") ?? 70;
+      let chMultVal  = LS.get("mult")  ?? 2;
+      let chStopPct  = LS.get("stop")  ?? 15;
+
+      chStartInput.value = chStartVal;
+      chMultInput.value  = chMultVal;
+      chStopInput.value  = chStopPct;
+
+      function saveChConfig() {
+        const s = parseFloat(chStartInput.value);
+        const m = parseFloat(chMultInput.value);
+        const p = parseFloat(chStopInput.value);
+        if (s > 0)  { chStartVal = s; LS.set("start", s); }
+        if (m >= 1) { chMultVal  = m; LS.set("mult",  m); }
+        if (p > 0 && p <= 50) { chStopPct = p; LS.set("stop", p); }
+        updateChallenge();
+        calculate();
+      }
+
+      [chStartInput, chMultInput, chStopInput].forEach(el => el.addEventListener("input", saveChConfig));
+
+      chEdit.addEventListener("click", () => {
+        const open = chConfig.classList.toggle("open");
+        chEdit.textContent = open ? "收起" : "修改设置";
+      });
+
+      function updateChallenge() {
+        const target = chStartVal * chMultVal;
+        chTargetValEl.textContent = fmt(target);
+        chStartEl.textContent = fmt(chStartVal) + " U";
+        stopPctLabelEl.textContent = chStopPct.toFixed(0);
+
+        const buyPrice    = parseFloat(buyPriceInput.value);
+        const amount      = parseFloat(amountInput.value);
+        const buyFeeRate  = (parseFloat(buyFeeRateInput.value  || "0.1")) / 100;
+        const sellFeeRate = (parseFloat(sellFeeRateInput.value || "0.1")) / 100;
+        const hasPosition = Number.isFinite(buyPrice) && buyPrice > 0
+                         && Number.isFinite(amount)   && amount > 0;
+        const btcBought   = hasPosition ? (amount / buyPrice) * (1 - buyFeeRate) : 0;
+
+        // current portfolio value = (total capital - amount invested) + current position value
+        const cashLeft = chStartVal - (hasPosition ? amount : 0);
+        let posValue = 0;
+        if (hasPosition && Number.isFinite(currentMarketPrice) && currentMarketPrice > 0) {
+          posValue = btcBought * currentMarketPrice * (1 - sellFeeRate);
+        } else if (hasPosition) {
+          posValue = amount; // no price yet, assume at cost
+        }
+        const totalNow = cashLeft + posValue;
+        const pnl      = totalNow - chStartVal;
+        const pct      = (totalNow / chStartVal - 1) * 100;
+        const progress = Math.min(100, Math.max(0, (totalNow / target) * 100));
+        const gap      = target - totalNow;
+
+        chCurrentValEl.textContent = fmt(totalNow);
+        chCurrentValEl.className   = "ch-num" + (totalNow >= target ? " done" : "");
+        chBarEl.style.width        = progress + "%";
+        chBarEl.className          = "ch-bar" + (totalNow >= target ? " done" : "");
+        challengeCardEl.className  = "challenge-card" + (totalNow >= target ? " done" : "");
+
+        chNowEl.textContent = hasPosition ? fmt(posValue) + " U" : "未持仓";
+        chPnlEl.textContent = (pnl >= 0 ? "+" : "") + fmt(pnl) + " U";
+        chPnlEl.className   = "ch-box-val " + (pnl >= 0 ? "profit" : "loss");
+        chGapEl.textContent = gap > 0 ? fmt(gap) + " U" : "已达到! 🎉";
+
+        if (totalNow >= target) {
+          chSubTextEl.textContent = "🎉 恭喜！你已经完成翻倍挑战！";
+        } else {
+          chSubTextEl.textContent = "进度 " + pct.toFixed(1) + "% · 还差 " + fmt(gap) + " USDT 达到目标";
+        }
+      }
+
       const signalCardEl  = document.getElementById("signalCard");
       const signalEmoji   = document.getElementById("signalEmoji");
       const signalTitle   = document.getElementById("signalTitle");
@@ -386,6 +604,23 @@
       let socket = null;
       let reconnectTimer = null;
       let feeOpen = false;
+
+      // ── Restore saved inputs ──
+      const saved = LS.get("inputs");
+      if (saved) {
+        if (saved.buyPrice)   buyPriceInput.value   = saved.buyPrice;
+        if (saved.amount)     amountInput.value     = saved.amount;
+        if (saved.buyFeeRate) buyFeeRateInput.value  = saved.buyFeeRate;
+        if (saved.sellFeeRate)sellFeeRateInput.value = saved.sellFeeRate;
+      }
+      function saveInputs() {
+        LS.set("inputs", {
+          buyPrice:    buyPriceInput.value,
+          amount:      amountInput.value,
+          buyFeeRate:  buyFeeRateInput.value,
+          sellFeeRate: sellFeeRateInput.value
+        });
+      }
 
       // ── RSI 计算 ──
       function calcRSI(closes, period = 14) {
@@ -554,12 +789,16 @@
         const buyFeeRate  = parseNonNeg(buyFeeRateInput.value  || "0.1") / 100;
         const sellFeeRate = parseNonNeg(sellFeeRateInput.value || "0.1") / 100;
 
+        saveInputs();
+        updateChallenge();
+
         resultBox.className = "result-box";
         resultPriceEl.innerHTML = "<sup>USDT </sup>--";
         resultVerdictEl.style.display = "none";
         resultVerdictEl.className = "result-verdict";
         resultDetailEl.textContent = "";
         formulaNoteEl.textContent = "";
+        resultExtraEl.style.display = "none";
 
         if (!Number.isFinite(buyPrice) || !Number.isFinite(amount)) return;
         if (buyPrice <= 0 || amount <= 0) return;
@@ -609,6 +848,36 @@
             "你花 " + fmt(amount) + " USDT 可以买到约 " + fmt(btcBought, 6) + " BTC，" +
             "卖价只要高于 " + fmt(breakEven) + " USDT 就不亏。";
         }
+
+        // ── 止损价 & 目标卖价 ──
+        resultExtraEl.style.display = "flex";
+        stopPctLabelEl.textContent = chStopPct.toFixed(0);
+
+        // 止损：总资金亏损 chStopPct% 时必须出
+        // cashLeft + btcBought * stopPrice * (1-sellFeeRate) = chStartVal * (1 - chStopPct/100)
+        const cashLeft   = chStartVal - amount;
+        const floorTotal = chStartVal * (1 - chStopPct / 100);
+        const stopPrice  = (floorTotal - cashLeft) / (btcBought * (1 - sellFeeRate));
+        if (stopPrice > 0) {
+          stopPriceValEl.textContent = fmt(stopPrice) + " USDT";
+          stopPriceSubEl.textContent = "价格跌到这里必须止损出局，保住剩余本金";
+        } else {
+          stopPriceValEl.textContent = "无需止损";
+          stopPriceSubEl.textContent = "即使跌至 0，损失也在承受范围内";
+        }
+
+        // 目标卖价：总资金达到 chStartVal * chMultVal
+        // cashLeft + btcBought * targetP * (1-sellFeeRate) = chStartVal * chMultVal
+        const targetTotal = chStartVal * chMultVal;
+        const targetPrice = (targetTotal - cashLeft) / (btcBought * (1 - sellFeeRate));
+        if (targetPrice > 0) {
+          targetPriceValEl.textContent = fmt(targetPrice) + " USDT";
+          const pctUp = ((targetPrice / buyPrice) - 1) * 100;
+          targetPriceSubEl.textContent = "买入价需涨 " + pctUp.toFixed(1) + "% 达到翻倍目标";
+        } else {
+          targetPriceValEl.textContent = "--";
+          targetPriceSubEl.textContent = "";
+        }
       }
 
       function setWsState(state) {
@@ -638,6 +907,7 @@
             livePriceEl.textContent = fmt(price, 2);
             currentMarketPrice = price;
             calculate();
+            updateChallenge();
           } catch (_) {}
         });
       }
@@ -653,6 +923,7 @@
         el.addEventListener("input", calculate)
       );
 
+      updateChallenge();
       connect();
     </script>
   </body>
