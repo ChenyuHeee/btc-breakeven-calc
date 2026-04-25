@@ -412,6 +412,7 @@
             <ol style="margin:6px 0 8px 16px;line-height:1.9">
               <li>注册 <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--accent)">Cloudflare Workers</a>（免费）</li>
               <li>新建 Worker，把下面代码全部粘贴进去，点「保存并部署」</li>
+              <li>验证：在浏览器打开 <code>https://你的worker地址/api/v3/ping</code>，应返回 <code>{}</code></li>
               <li>把 Worker 的 URL（如 <code>https://xxx.workers.dev</code>）填到上面「代理地址」框里</li>
             </ol>
             <pre>export default {
@@ -686,8 +687,14 @@
           throw new Error("公开接口和 Header 均正常，但签名请求失败：" + networkErr.message);
         }
         if (!res.ok) {
-          const e = await res.json().catch(() => ({}));
-          throw new Error((e.msg || ("HTTP " + res.status)) + (e.code ? "（code " + e.code + "）" : ""));
+          const rawText = await res.text().catch(() => "");
+          let msg = "HTTP " + res.status;
+          try {
+            const j = JSON.parse(rawText);
+            if (j.msg) msg += "：" + j.msg + (j.code ? "（code " + j.code + "）" : "");
+            else msg += "：" + rawText.slice(0, 200);
+          } catch { msg += rawText ? "：" + rawText.slice(0, 200) : ""; }
+          throw new Error(msg);
         }
         return res.json();
       }
