@@ -653,6 +653,7 @@
         const qBase = new URLSearchParams({ ...params, timestamp: ts }).toString();
         const sig = await hmacSHA256(secret, qBase);
         const url = base + path + "?" + qBase + "&signature=" + sig;
+        console.log("[BinanceSync] 请求 URL:", url.split("&signature")[0] + "&signature=...");
         let res;
         try {
           res = await fetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
@@ -688,12 +689,17 @@
         }
         if (!res.ok) {
           const rawText = await res.text().catch(() => "");
-          let msg = "HTTP " + res.status;
-          try {
-            const j = JSON.parse(rawText);
-            if (j.msg) msg += "：" + j.msg + (j.code ? "（code " + j.code + "）" : "");
-            else msg += "：" + rawText.slice(0, 200);
-          } catch { msg += rawText ? "：" + rawText.slice(0, 200) : ""; }
+          let msg = "HTTP " + res.status + "（请求地址：" + base + path + "）";
+          if (rawText.trim().startsWith("<")) {
+            msg += "\n响应为 HTML 页面，说明请求打到了错误的服务器。";
+            if (proxy) msg += "\n当前代理地址：" + proxy + "\n请检查是否填写正确（应为 Cloudflare Worker 地址，如 https://xxx.workers.dev）";
+          } else {
+            try {
+              const j = JSON.parse(rawText);
+              if (j.msg) msg += "：" + j.msg + (j.code ? "（code " + j.code + "）" : "");
+              else msg += "：" + rawText.slice(0, 300);
+            } catch { msg += rawText ? "：" + rawText.slice(0, 300) : ""; }
+          }
           throw new Error(msg);
         }
         return res.json();
@@ -747,6 +753,11 @@
         if (k) LS.set("apiKey", k);
         if (s) LS.set("apiSecret", s);
         const pxy = proxyInput.value.trim();
+        if (pxy && (!pxy.startsWith("https://") || pxy.includes("github.io"))) {
+          const errEl = document.getElementById("chSyncErrMsg");
+          if (errEl) { errEl.style.display = "block"; errEl.textContent = "⚠️ 代理地址格式不对，应为 Cloudflare Worker 地址（https://xxx.workers.dev），请重新填写"; }
+          return;
+        }
         LS.set("proxy", pxy || null);
         const sv = parseFloat(chStartInput.value), mv = parseFloat(chMultInput.value), pv = parseFloat(chStopInput.value);
         if (sv > 0)  { chStartVal = sv; LS.set("start", sv); }
