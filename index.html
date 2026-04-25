@@ -292,7 +292,9 @@
         transition: opacity .15s;
       }
       .ch-save-btn:hover { opacity: .88; }
-      .ch-trades { display: flex; flex-direction: column; gap: 6px; }
+      .ch-proxy-help { font-size: 0.78rem; color: var(--muted); background: #fdfaf6; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; line-height: 1.7; }
+      .ch-proxy-help summary { cursor: pointer; color: var(--accent); font-weight: 600; user-select: none; }
+      .ch-proxy-help pre { margin-top: 8px; background: #f0ece4; border-radius: 8px; padding: 10px; font-size: 0.72rem; overflow-x: auto; white-space: pre; color: #333; line-height: 1.5; }
       .ch-trade-row { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; padding: 7px 10px; background: #fdfaf6; border: 1px solid var(--border); border-radius: 9px; }
       .ch-trade-side { font-weight: 700; }
       .ch-trade-side.buy  { color: var(--green); }
@@ -398,6 +400,43 @@
           <label>止损 %</label>
           <input id="chStopInput" type="number" inputmode="decimal" min="1" max="50" step="1" placeholder="15" />
         </div>
+        <div class="ch-config-row">
+          <label>代理地址</label>
+          <input id="proxyInput" type="url" placeholder="https://your-worker.workers.dev（解决CORS用）" autocomplete="off" />
+        </div>
+        <details class="ch-proxy-help">
+          <summary>❓ 为什么需要代理？如何免费部署？</summary>
+          <div style="margin-top:8px">
+            <p>从网页调用 Binance API 需要携带自定义 Header，浏览器的同源策略会先发 CORS 预检请求，而 Binance 不允许所有来源跨域访问带 Header 的接口。</p>
+            <p style="margin-top:6px">解决方法：免费部署一个 <strong>Cloudflare Worker</strong> 作为中转（每天 10 万次免费）：</p>
+            <ol style="margin:6px 0 8px 16px;line-height:1.9">
+              <li>注册 <a href="https://workers.cloudflare.com" target="_blank" style="color:var(--accent)">Cloudflare Workers</a>（免费）</li>
+              <li>新建 Worker，把下面代码全部粘贴进去，点「保存并部署」</li>
+              <li>把 Worker 的 URL（如 <code>https://xxx.workers.dev</code>）填到上面「代理地址」框里</li>
+            </ol>
+            <pre>export default {
+  async fetch(request) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Allow-Methods': 'GET,POST,DELETE,PUT,OPTIONS',
+      }});
+    }
+    const url = new URL(request.url);
+    const target = 'https://api.binance.com' + url.pathname + url.search;
+    const res = await fetch(target, {
+      method: request.method,
+      headers: request.headers,
+      body: request.method !== 'GET' ? request.body : undefined,
+    });
+    const resp = new Response(res.body, res);
+    resp.headers.set('Access-Control-Allow-Origin', '*');
+    return resp;
+  }
+};</pre>
+          </div>
+        </details>
         <button class="ch-save-btn" id="chSaveBtn">保存并同步</button>
       </div>
       <div id="chTradesWrap" style="display:none;">
@@ -545,6 +584,7 @@
       const chStartInput    = document.getElementById("chStartInput");
       const chMultInput     = document.getElementById("chMultInput");
       const chStopInput     = document.getElementById("chStopInput");
+      const proxyInput      = document.getElementById("proxyInput");
       const chCurrentValEl  = document.getElementById("chCurrentVal");
       const chTargetValEl   = document.getElementById("chTargetVal");
       const chTradesWrap    = document.getElementById("chTradesWrap");
@@ -579,6 +619,7 @@
       // Restore API keys
       apiKeyInput.value    = LS.get("apiKey")    || "";
       apiSecretInput.value = LS.get("apiSecret") || "";
+      proxyInput.value     = LS.get("proxy")     || "";
       if (chStartVal !== null) chStartInput.value = chStartVal;
       chMultInput.value = chMultVal;
       chStopInput.value = chStopPct;
@@ -597,25 +638,28 @@
         const apiKey = (LS.get("apiKey") || "").trim();
         const secret = (LS.get("apiSecret") || "").trim();
         if (!apiKey || !secret) throw new Error("未设置 API Key");
+        const proxy = (LS.get("proxy") || "").trim().replace(/\/$/, "");
+        const base  = proxy || BINANCE_API;
         const ts = Date.now();
         const qBase = new URLSearchParams({ ...params, timestamp: ts }).toString();
         const sig = await hmacSHA256(secret, qBase);
-        const url = BINANCE_API + path + "?" + qBase + "&signature=" + sig;
+        const url = base + path + "?" + qBase + "&signature=" + sig;
         let res;
         try {
           res = await fetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
         } catch (networkErr) {
+          if (proxy) {
+            throw new Error("代理请求失败，请确认代理地址正确且 Worker 已部署：" + networkErr.message);
+          }
           // 步骤1：测试公开接口（无自定义 header）是否可达
           let pingOk = false;
           try {
             const ping = await fetch(BINANCE_API + "/api/v3/ping", { signal: AbortSignal.timeout(5000) });
             pingOk = ping.ok;
           } catch (_) {}
-
           if (!pingOk) {
             throw new Error("网络无法连接 Binance API，请检查 VPN / 代理是否对浏览器生效");
           }
-
           // 步骤2：带 X-MBX-APIKEY header 请求公开接口，测试 CORS preflight 是否通过
           let hdrOk = false;
           try {
@@ -625,17 +669,12 @@
             });
             hdrOk = true;
           } catch (_) {}
-
           if (!hdrOk) {
             throw new Error(
-              "CORS 预检失败：浏览器发送 X-MBX-APIKEY 自定义 Header 前须先发 OPTIONS 预检请求，" +
-              "当前页面来源（" + location.origin + "）被 Binance 服务器拒绝了跨域访问。\n" +
-              "解决方法：将本 HTML 文件下载后用浏览器直接打开（file:// 协议无跨域限制），" +
-              "或将文件放到本地 HTTP 服务器运行。\n" +
-              "原始错误：" + networkErr.message
+              "CORS 预检失败：当前页面来源（" + location.origin + "）无法直接调用需要自定义 Header 的 Binance API。\n" +
+              "解决方法：在上方设置面板填写「代理地址」（Cloudflare Worker），点「❓」查看部署步骤。"
             );
           }
-
           throw new Error("公开接口和 Header 均正常，但签名请求失败：" + networkErr.message);
         }
         if (!res.ok) {
@@ -692,6 +731,8 @@
         const k = apiKeyInput.value.trim(), s = apiSecretInput.value.trim();
         if (k) LS.set("apiKey", k);
         if (s) LS.set("apiSecret", s);
+        const pxy = proxyInput.value.trim();
+        LS.set("proxy", pxy || null);
         const sv = parseFloat(chStartInput.value), mv = parseFloat(chMultInput.value), pv = parseFloat(chStopInput.value);
         if (sv > 0)  { chStartVal = sv; LS.set("start", sv); }
         if (mv >= 1) { chMultVal  = mv; LS.set("mult",  mv); }
