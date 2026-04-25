@@ -601,10 +601,24 @@
         const qBase = new URLSearchParams({ ...params, timestamp: ts }).toString();
         const sig = await hmacSHA256(secret, qBase);
         const url = BINANCE_API + path + "?" + qBase + "&signature=" + sig;
-        const res = await fetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
+        let res;
+        try {
+          res = await fetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
+        } catch (networkErr) {
+          // 区分：先尝试 ping 公开接口，判断是网络不通还是其他问题
+          let connectivity = false;
+          try {
+            const ping = await fetch(BINANCE_API + "/api/v3/ping", { signal: AbortSignal.timeout(5000) });
+            connectivity = ping.ok;
+          } catch (_) {}
+          if (!connectivity) {
+            throw new Error("网络无法连接 Binance API（可能需要 VPN / 代理）。原始错误：" + networkErr.message);
+          }
+          throw new Error("请求失败（网络已通但 fetch 出错）：" + networkErr.message);
+        }
         if (!res.ok) {
           const e = await res.json().catch(() => ({}));
-          throw new Error(e.msg || "HTTP " + res.status);
+          throw new Error((e.msg || ("HTTP " + res.status)) + (e.code ? "（code " + e.code + "）" : ""));
         }
         return res.json();
       }
