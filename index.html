@@ -192,11 +192,50 @@
       .result-detail { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
       .formula-note  { font-size: 0.8rem; color: #bbb; text-align: center; }
 
+      /* ── market reference card ── */
+      .ref-card {
+        width: min(640px, 100%);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 18px 22px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        display: flex; flex-direction: column; gap: 16px;
+      }
+      .ref-title { font-size: 0.85rem; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+      .stats-row { display: flex; gap: 10px; }
+      .stat-box {
+        flex: 1; background: #fdfaf6; border: 1px solid var(--border);
+        border-radius: 14px; padding: 12px 14px;
+        display: flex; flex-direction: column; gap: 4px;
+      }
+      .stat-label { font-size: 0.78rem; color: var(--muted); }
+      .stat-value { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .stat-value.up   { color: var(--green); }
+      .stat-value.down { color: var(--red); }
+
+      .alert-row { display: flex; align-items: center; gap: 10px; }
+      .alert-row label { font-size: 0.88rem; color: var(--muted); white-space: nowrap; }
+      .alert-row .input-wrap { flex: 1; }
+      .alert-row .input-wrap input { font-size: 1rem; padding: 11px 58px 11px 14px; }
+      .alert-badge {
+        font-size: 0.88rem; font-weight: 600;
+        padding: 8px 14px; border-radius: 12px;
+        white-space: nowrap; flex-shrink: 0;
+        background: #f3ebe0; color: var(--muted);
+        transition: background 0.3s, color 0.3s;
+      }
+      .alert-badge.hit  { background: #d4f0e2; color: var(--green); }
+      .alert-badge.wait { background: #fdf0f0; color: var(--red); }
+
       @media (max-width: 480px) {
         .live-price { font-size: 1.6rem; }
         .card { padding: 20px 16px; }
         .result-price { font-size: 1.9rem; }
         .fee-row { flex-direction: column; }
+        .stats-row { flex-wrap: wrap; }
+        .alert-row { flex-wrap: wrap; }
+        .alert-badge { width: 100%; text-align: center; }
       }
     </style>
   </head>
@@ -213,6 +252,32 @@
           <span id="wsLabel">--</span>
         </div>
         <button class="use-price-btn" id="usePriceBtn">用当前价买入</button>
+      </div>
+    </div>
+
+    <div class="ref-card">
+      <div class="ref-title">📊 买入参考（今日数据）</div>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-label">24小时涨跌</div>
+          <div class="stat-value" id="stat24hChange">--</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">今日最高价</div>
+          <div class="stat-value" id="stat24hHigh">--</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">今日最低价</div>
+          <div class="stat-value" id="stat24hLow">--</div>
+        </div>
+      </div>
+      <div class="alert-row">
+        <label for="targetPrice">🎯 我想在这个价格买入：</label>
+        <div class="input-wrap">
+          <input id="targetPrice" type="number" inputmode="decimal" min="0" step="any" placeholder="例如 75000" />
+          <span class="input-unit">USDT</span>
+        </div>
+        <div class="alert-badge" id="alertBadge">等待输入</div>
       </div>
     </div>
 
@@ -296,10 +361,56 @@
       const resultDetailEl  = document.getElementById("resultDetail");
       const formulaNoteEl   = document.getElementById("formulaNote");
 
+      const stat24hChangeEl = document.getElementById("stat24hChange");
+      const stat24hHighEl   = document.getElementById("stat24hHigh");
+      const stat24hLowEl    = document.getElementById("stat24hLow");
+      const targetPriceInput= document.getElementById("targetPrice");
+      const alertBadgeEl    = document.getElementById("alertBadge");
+
       let currentMarketPrice = null;
       let socket = null;
       let reconnectTimer = null;
       let feeOpen = false;
+      let stat24hLow = null;
+
+      // ── 24h stats from Binance REST ──
+      async function fetch24h() {
+        try {
+          const res = await fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT");
+          const d = await res.json();
+          const pct = parseFloat(d.priceChangePercent);
+          const high = parseFloat(d.highPrice);
+          const low  = parseFloat(d.lowPrice);
+          stat24hLow = low;
+
+          stat24hChangeEl.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
+          stat24hChangeEl.className = "stat-value " + (pct >= 0 ? "up" : "down");
+          stat24hHighEl.textContent = fmt(high, 2) + " U";
+          stat24hLowEl.textContent  = fmt(low,  2) + " U";
+          updateAlertBadge();
+        } catch (_) {}
+      }
+
+      function updateAlertBadge() {
+        const target = parseFloat(targetPriceInput.value);
+        if (!Number.isFinite(target) || target <= 0) {
+          alertBadgeEl.className = "alert-badge";
+          alertBadgeEl.textContent = "等待输入";
+          return;
+        }
+        if (Number.isFinite(currentMarketPrice) && currentMarketPrice <= target) {
+          alertBadgeEl.className = "alert-badge hit";
+          alertBadgeEl.textContent = "✅ 已到目标价，可以考虑买入";
+        } else if (Number.isFinite(currentMarketPrice)) {
+          const diff = currentMarketPrice - target;
+          alertBadgeEl.className = "alert-badge wait";
+          alertBadgeEl.textContent = "还差 " + fmt(diff, 0) + " USDT";
+        }
+      }
+
+      targetPriceInput.addEventListener("input", updateAlertBadge);
+      fetch24h();
+      setInterval(fetch24h, 60000); // 每分钟刷新一次
 
       feeToggle.addEventListener("click", () => {
         feeOpen = !feeOpen;
@@ -409,6 +520,7 @@
             livePriceEl.textContent = fmt(price, 2);
             currentMarketPrice = price;
             calculate();
+            updateAlertBadge();
           } catch (_) {}
         });
       }
