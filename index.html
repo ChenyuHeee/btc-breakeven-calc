@@ -248,9 +248,9 @@
       }
       .challenge-card.done { background: linear-gradient(135deg, #0f3d2a 0%, #1a5e3a 100%); border-color: #2a8a5a; }
       .ch-header { display: flex; align-items: center; justify-content: space-between; }
+      .ch-actions { display: flex; align-items: center; gap: 8px; }
       .ch-title  { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #aaa; }
       .ch-edit   { font-size: 0.78rem; color: #888; cursor: pointer; text-decoration: underline dotted; }
-      .ch-goal   { display: flex; align-items: baseline; gap: 8px; }
       .ch-num    { font-size: 2.6rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
       .ch-num.done { color: #4ade80; }
       .ch-unit   { font-size: 1rem; color: #aaa; }
@@ -264,18 +264,38 @@
       .ch-box-val   { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
       .ch-box-val.profit { color: #4ade80; }
       .ch-box-val.loss   { color: #f87171; }
-      .ch-config { display: none; flex-direction: column; gap: 10px; padding-top: 4px; }
+      .ch-btn {
+        font-size: 0.75rem; color: #888; cursor: pointer;
+        border: 1px solid rgba(255,255,255,0.15); border-radius: 999px;
+        padding: 4px 10px; background: rgba(255,255,255,0.05); transition: background .15s; white-space: nowrap;
+      }
+      .ch-btn:hover { background: rgba(255,255,255,.12); }
+      .ch-btn.sync-ok  { color: #4ade80; border-color: #2a5a3a; }
+      .ch-btn.sync-err { color: #f87171; }
+      .ch-config { display: none; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.08); }
       .ch-config.open { display: flex; }
+      .ch-config-note { font-size: 0.75rem; color: #f87171; line-height: 1.5; }
       .ch-config-row { display: flex; align-items: center; gap: 10px; }
-      .ch-config-row label { font-size: 0.83rem; color: #aaa; white-space: nowrap; }
+      .ch-config-row label { font-size: 0.83rem; color: #aaa; white-space: nowrap; min-width: 70px; }
       .ch-config-row input {
         flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 10px; padding: 8px 12px; color: #fff; font: inherit; font-size: 0.95rem;
+        border-radius: 10px; padding: 8px 12px; color: #fff; font: inherit; font-size: 0.9rem;
         -moz-appearance: textfield;
       }
       .ch-config-row input::-webkit-outer-spin-button,
       .ch-config-row input::-webkit-inner-spin-button { -webkit-appearance: none; }
       .ch-config-row input:focus { outline: none; border-color: var(--accent); }
+      .ch-save-btn {
+        background: var(--accent); color: #fff; border: none; border-radius: 10px;
+        padding: 9px 16px; font: inherit; font-size: .88rem; cursor: pointer; font-weight: 600;
+      }
+      .ch-trades { display: flex; flex-direction: column; gap: 6px; }
+      .ch-trade-row { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; padding: 7px 10px; background: rgba(255,255,255,.05); border-radius: 9px; }
+      .ch-trade-side { font-weight: 700; }
+      .ch-trade-side.buy  { color: #4ade80; }
+      .ch-trade-side.sell { color: #f87171; }
+      .ch-trade-info { color: #aaa; }
+      .ch-trades-title { font-size: .75rem; color: #888; letter-spacing: .05em; text-transform: uppercase; }
 
       /* extra result rows */
       .result-extra { display: flex; gap: 10px; }
@@ -323,7 +343,10 @@
     <div class="challenge-card" id="challengeCard">
       <div class="ch-header">
         <div class="ch-title">🏆 我的翻倍挑战</div>
-        <span class="ch-edit" id="chEdit">修改设置</span>
+        <div class="ch-actions">
+          <button class="ch-btn" id="chSyncBtn">🔄 同步账户</button>
+          <span class="ch-edit" id="chEdit">⚙️ 设置</span>
+        </div>
       </div>
       <div class="ch-goal">
         <div class="ch-num" id="chCurrentVal">--</div>
@@ -350,18 +373,32 @@
         </div>
       </div>
       <div class="ch-config" id="chConfig">
+        <div class="ch-config-note">⚠️ 请仅使用「只读权限」的 API Key（不要开启提现/交易权限）。Key 只保存在你的浏览器本地，不会发到任何服务器。</div>
+        <div class="ch-config-row">
+          <label>API Key</label>
+          <input id="apiKeyInput" type="password" placeholder="粘贴 Binance API Key" autocomplete="off" />
+        </div>
+        <div class="ch-config-row">
+          <label>Secret</label>
+          <input id="apiSecretInput" type="password" placeholder="粘贴 API Secret" autocomplete="off" />
+        </div>
         <div class="ch-config-row">
           <label>起始资金</label>
-          <input id="chStartInput" type="number" inputmode="decimal" min="0" step="any" placeholder="70" />
+          <input id="chStartInput" type="number" inputmode="decimal" min="0" step="any" placeholder="首次投入的总 USDT" />
         </div>
         <div class="ch-config-row">
           <label>目标倍数</label>
           <input id="chMultInput" type="number" inputmode="decimal" min="1" step="0.1" placeholder="2" />
         </div>
         <div class="ch-config-row">
-          <label>止损比例 %</label>
+          <label>止损 %</label>
           <input id="chStopInput" type="number" inputmode="decimal" min="1" max="50" step="1" placeholder="15" />
         </div>
+        <button class="ch-save-btn" id="chSaveBtn">保存并同步</button>
+      </div>
+      <div id="chTradesWrap" style="display:none;">
+        <div class="ch-trades-title" style="margin-bottom:8px;">近期 BTC 交易</div>
+        <div class="ch-trades" id="chTrades"></div>
       </div>
     </div>
 
@@ -376,12 +413,17 @@
       </div>
       <div class="indicators">
         <div class="ind-box">
-          <div class="ind-label">RSI(14) 超买超卖指数</div>
+          <div class="ind-label">RSI(14)</div>
           <div class="ind-value" id="indRsiVal">--</div>
           <div class="ind-bar-wrap"><div class="ind-bar" id="indRsiBar" style="width:0%;background:#ccc"></div></div>
         </div>
         <div class="ind-box">
-          <div class="ind-label">价格 vs 均线(MA20)</div>
+          <div class="ind-label">MACD 趋势</div>
+          <div class="ind-value" id="indMacdVal">--</div>
+          <div class="ind-bar-wrap"><div class="ind-bar" id="indMacdBar" style="width:50%;background:#ccc"></div></div>
+        </div>
+        <div class="ind-box">
+          <div class="ind-label">价格 vs MA20</div>
           <div class="ind-value" id="indMaVal">--</div>
           <div class="ind-bar-wrap"><div class="ind-bar" id="indMaBar" style="width:50%;background:#ccc"></div></div>
         </div>
@@ -469,7 +511,8 @@
     </div>
 
     <script>
-      const BINANCE_WS = "wss://stream.binance.com:9443/ws/btcusdt@trade";
+      const BINANCE_WS  = "wss://stream.binance.com:9443/ws/btcusdt@trade";
+      const BINANCE_API = "https://api.binance.com";
 
       const livePriceEl     = document.getElementById("livePrice");
       const wsDotEl         = document.getElementById("wsDot");
@@ -490,12 +533,20 @@
       // ── Challenge card elements ──
       const challengeCardEl = document.getElementById("challengeCard");
       const chEdit          = document.getElementById("chEdit");
+      const chSyncBtn       = document.getElementById("chSyncBtn");
       const chConfig        = document.getElementById("chConfig");
+      const chSaveBtn       = document.getElementById("chSaveBtn");
+      const apiKeyInput     = document.getElementById("apiKeyInput");
+      const apiSecretInput  = document.getElementById("apiSecretInput");
       const chStartInput    = document.getElementById("chStartInput");
       const chMultInput     = document.getElementById("chMultInput");
       const chStopInput     = document.getElementById("chStopInput");
       const chCurrentValEl  = document.getElementById("chCurrentVal");
       const chTargetValEl   = document.getElementById("chTargetVal");
+      const chTradesWrap    = document.getElementById("chTradesWrap");
+      const chTradesEl      = document.getElementById("chTrades");
+      const indMacdVal      = document.getElementById("indMacdVal");
+      const indMacdBar      = document.getElementById("indMacdBar");
       const chSubTextEl     = document.getElementById("chSubText");
       const chBarEl         = document.getElementById("chBar");
       const chStartEl       = document.getElementById("chStart");
@@ -515,13 +566,92 @@
         set: (k, v) => localStorage.setItem("btc_" + k, JSON.stringify(v))
       };
 
-      let chStartVal = LS.get("start") ?? 70;
+      let chStartVal = LS.get("start") ?? null;
       let chMultVal  = LS.get("mult")  ?? 2;
       let chStopPct  = LS.get("stop")  ?? 15;
+      let liveUsdtBalance = null;
+      let liveBtcBalance  = null;
 
-      chStartInput.value = chStartVal;
-      chMultInput.value  = chMultVal;
-      chStopInput.value  = chStopPct;
+      // Restore API keys
+      apiKeyInput.value    = LS.get("apiKey")    || "";
+      apiSecretInput.value = LS.get("apiSecret") || "";
+      if (chStartVal !== null) chStartInput.value = chStartVal;
+      chMultInput.value = chMultVal;
+      chStopInput.value = chStopPct;
+
+      // ── HMAC-SHA256 (SubtleCrypto) ──
+      async function hmacSHA256(secret, message) {
+        const enc = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+          "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+        );
+        const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
+        return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+      }
+
+      async function binanceSigned(path, params = {}) {
+        const apiKey = (LS.get("apiKey") || "").trim();
+        const secret = (LS.get("apiSecret") || "").trim();
+        if (!apiKey || !secret) throw new Error("未设置 API Key");
+        const ts = Date.now();
+        const qBase = new URLSearchParams({ ...params, timestamp: ts }).toString();
+        const sig = await hmacSHA256(secret, qBase);
+        const url = BINANCE_API + path + "?" + qBase + "&signature=" + sig;
+        const res = await fetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.msg || "HTTP " + res.status);
+        }
+        return res.json();
+      }
+
+      async function syncAccount() {
+        chSyncBtn.textContent = "同步中..."; chSyncBtn.className = "ch-btn";
+        try {
+          const account = await binanceSigned("/api/v3/account");
+          const bals = account.balances || [];
+          liveUsdtBalance = parseFloat(bals.find(b => b.asset === "USDT")?.free || 0);
+          liveBtcBalance  = parseFloat(bals.find(b => b.asset === "BTC")?.free  || 0);
+
+          const chUsdtEl = document.getElementById("chNow");
+          if (chUsdtEl) chUsdtEl.textContent = fmt(liveUsdtBalance) + " U";
+
+          // Recent trades
+          const trades = await binanceSigned("/api/v3/myTrades", { symbol: "BTCUSDT", limit: 10 });
+          chTradesEl.innerHTML = "";
+          if (trades.length > 0) {
+            trades.slice().reverse().forEach(t => {
+              const side = t.isBuyer ? "BUY" : "SELL";
+              const d = new Date(t.time);
+              const ds = (d.getMonth()+1)+"/"+d.getDate()+" "+d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0");
+              const row = document.createElement("div"); row.className = "ch-trade-row";
+              row.innerHTML = `<span class="ch-trade-side ${side.toLowerCase()}">${side}</span><span class="ch-trade-info">${fmt(parseFloat(t.qty),6)} BTC @ ${fmt(parseFloat(t.price))}</span><span class="ch-trade-info">${ds}</span>`;
+              chTradesEl.appendChild(row);
+            });
+            chTradesWrap.style.display = "block";
+          }
+          updateChallenge();
+          chSyncBtn.textContent = "✅ 已同步"; chSyncBtn.className = "ch-btn sync-ok";
+          setTimeout(() => { chSyncBtn.textContent = "🔄 同步账户"; chSyncBtn.className = "ch-btn"; }, 3000);
+        } catch (e) {
+          chSyncBtn.textContent = "❌ " + (e.message || "失败"); chSyncBtn.className = "ch-btn sync-err";
+          setTimeout(() => { chSyncBtn.textContent = "🔄 同步账户"; chSyncBtn.className = "ch-btn"; }, 4000);
+        }
+      }
+
+      chSyncBtn.addEventListener("click", syncAccount);
+
+      chSaveBtn.addEventListener("click", () => {
+        const k = apiKeyInput.value.trim(), s = apiSecretInput.value.trim();
+        if (k) LS.set("apiKey", k);
+        if (s) LS.set("apiSecret", s);
+        const sv = parseFloat(chStartInput.value), mv = parseFloat(chMultInput.value), pv = parseFloat(chStopInput.value);
+        if (sv > 0)  { chStartVal = sv; LS.set("start", sv); }
+        if (mv >= 1) { chMultVal  = mv; LS.set("mult",  mv); }
+        if (pv > 0 && pv <= 50) { chStopPct = pv; LS.set("stop", pv); }
+        updateChallenge(); calculate();
+        if (k && s) syncAccount();
+      });
 
       function saveChConfig() {
         const s = parseFloat(chStartInput.value);
@@ -542,48 +672,65 @@
       });
 
       function updateChallenge() {
-        const target = chStartVal * chMultVal;
-        chTargetValEl.textContent = fmt(target);
-        chStartEl.textContent = fmt(chStartVal) + " U";
+        const startVal = chStartVal;
+        const target   = startVal ? startVal * chMultVal : null;
+        chTargetValEl.textContent = target ? fmt(target) : "--";
+        const chStartEl2 = document.getElementById("chStart");
+        if (chStartEl2) chStartEl2.textContent = startVal ? fmt(startVal) + " U" : "--";
         stopPctLabelEl.textContent = chStopPct.toFixed(0);
 
-        const buyPrice    = parseFloat(buyPriceInput.value);
-        const amount      = parseFloat(amountInput.value);
-        const buyFeeRate  = (parseFloat(buyFeeRateInput.value  || "0.1")) / 100;
-        const sellFeeRate = (parseFloat(sellFeeRateInput.value || "0.1")) / 100;
-        const hasPosition = Number.isFinite(buyPrice) && buyPrice > 0
-                         && Number.isFinite(amount)   && amount > 0;
-        const btcBought   = hasPosition ? (amount / buyPrice) * (1 - buyFeeRate) : 0;
-
-        // current portfolio value = (total capital - amount invested) + current position value
-        const cashLeft = chStartVal - (hasPosition ? amount : 0);
-        let posValue = 0;
-        if (hasPosition && Number.isFinite(currentMarketPrice) && currentMarketPrice > 0) {
-          posValue = btcBought * currentMarketPrice * (1 - sellFeeRate);
-        } else if (hasPosition) {
-          posValue = amount; // no price yet, assume at cost
-        }
-        const totalNow = cashLeft + posValue;
-        const pnl      = totalNow - chStartVal;
-        const pct      = (totalNow / chStartVal - 1) * 100;
-        const progress = Math.min(100, Math.max(0, (totalNow / target) * 100));
-        const gap      = target - totalNow;
-
-        chCurrentValEl.textContent = fmt(totalNow);
-        chCurrentValEl.className   = "ch-num" + (totalNow >= target ? " done" : "");
-        chBarEl.style.width        = progress + "%";
-        chBarEl.className          = "ch-bar" + (totalNow >= target ? " done" : "");
-        challengeCardEl.className  = "challenge-card" + (totalNow >= target ? " done" : "");
-
-        chNowEl.textContent = hasPosition ? fmt(posValue) + " U" : "未持仓";
-        chPnlEl.textContent = (pnl >= 0 ? "+" : "") + fmt(pnl) + " U";
-        chPnlEl.className   = "ch-box-val " + (pnl >= 0 ? "profit" : "loss");
-        chGapEl.textContent = gap > 0 ? fmt(gap) + " U" : "已达到! 🎉";
-
-        if (totalNow >= target) {
-          chSubTextEl.textContent = "🎉 恭喜！你已经完成翻倍挑战！";
+        let totalNow;
+        if (liveUsdtBalance !== null) {
+          // 使用 Binance 实时余额
+          const btcVal = (liveBtcBalance && Number.isFinite(currentMarketPrice) && currentMarketPrice > 0)
+            ? liveBtcBalance * currentMarketPrice : 0;
+          totalNow = liveUsdtBalance + btcVal;
         } else {
-          chSubTextEl.textContent = "进度 " + pct.toFixed(1) + "% · 还差 " + fmt(gap) + " USDT 达到目标";
+          // 降级：用表单数据推算
+          const buyPrice    = parseFloat(buyPriceInput.value);
+          const amount      = parseFloat(amountInput.value);
+          const buyFeeRate  = (parseFloat(buyFeeRateInput.value  || "0.1")) / 100;
+          const sellFeeRate = (parseFloat(sellFeeRateInput.value || "0.1")) / 100;
+          const hasPosition = Number.isFinite(buyPrice) && buyPrice > 0 && Number.isFinite(amount) && amount > 0;
+          const btcBought   = hasPosition ? (amount / buyPrice) * (1 - buyFeeRate) : 0;
+          const cashLeft    = startVal ? startVal - (hasPosition ? amount : 0) : 0;
+          let posValue = 0;
+          if (hasPosition && Number.isFinite(currentMarketPrice) && currentMarketPrice > 0)
+            posValue = btcBought * currentMarketPrice * (1 - sellFeeRate);
+          else if (hasPosition) posValue = amount;
+          totalNow = startVal ? cashLeft + posValue : null;
+        }
+
+        const chNowEl2 = document.getElementById("chNow");
+        if (chNowEl2) chNowEl2.textContent = liveUsdtBalance !== null ? fmt(liveUsdtBalance) + " U" : (totalNow ? fmt(totalNow) + " U" : "未持仓");
+
+        if (totalNow != null && startVal) {
+          const pnl      = totalNow - startVal;
+          const pct      = (totalNow / startVal - 1) * 100;
+          const progress = target ? Math.min(100, Math.max(0, (totalNow / target) * 100)) : 0;
+          const gap      = target ? target - totalNow : 0;
+
+          chCurrentValEl.textContent = fmt(totalNow);
+          chCurrentValEl.className   = "ch-num" + (target && totalNow >= target ? " done" : "");
+          chBarEl.style.width        = progress + "%";
+          chBarEl.className          = "ch-bar" + (target && totalNow >= target ? " done" : "");
+          challengeCardEl.className  = "challenge-card" + (target && totalNow >= target ? " done" : "");
+
+          const chPnlEl2 = document.getElementById("chPnl");
+          const chGapEl2 = document.getElementById("chGap");
+          if (chPnlEl2) { chPnlEl2.textContent = (pnl >= 0 ? "+" : "") + fmt(pnl) + " U"; chPnlEl2.className = "ch-box-val " + (pnl >= 0 ? "profit" : "loss"); }
+          if (chGapEl2) chGapEl2.textContent = gap > 0 ? fmt(gap) + " U" : "已达到! 🎉";
+
+          if (target && totalNow >= target) {
+            chSubTextEl.textContent = "🎉 恭喜！你已经完成翻倍挑战！";
+          } else if (target) {
+            chSubTextEl.textContent = "进度 " + pct.toFixed(1) + "% · 还差 " + fmt(gap) + " USDT 达到目标";
+          } else {
+            chSubTextEl.textContent = "盈亏 " + (pnl >= 0 ? "+" : "") + pct.toFixed(1) + "%";
+          }
+        } else {
+          chCurrentValEl.textContent = "--";
+          chSubTextEl.textContent = liveUsdtBalance !== null ? "请在设置中填写起始资金以追踪进度" : "请先设置 API Key 同步账户，或手动填写起始资金";
         }
       }
 
@@ -637,6 +784,29 @@
         return 100 - 100 / (1 + rs);
       }
 
+      // ── EMA 计算 ──
+      function calcEMA(values, period) {
+        if (values.length < period) return [];
+        const k = 2 / (period + 1);
+        let ema = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+        const r = [ema];
+        for (let i = period; i < values.length; i++) { ema = values[i]*k + ema*(1-k); r.push(ema); }
+        return r;
+      }
+
+      // ── MACD(12,26,9) ──
+      function calcMACD(closes) {
+        if (closes.length < 34) return null;
+        const e12 = calcEMA(closes, 12), e26 = calcEMA(closes, 26);
+        const off = (closes.length - e26.length) - (closes.length - e12.length);
+        const ml = [];
+        for (let i = 0; i < e26.length; i++) ml.push(e12[i + off] - e26[i]);
+        const sig = calcEMA(ml, 9);
+        const h  = ml[ml.length-1] - sig[sig.length-1];
+        const ph = ml[ml.length-2] - sig[sig.length-2];
+        return { histogram: h, prevHist: ph };
+      }
+
       // ── MA 计算 ──
       function calcMA(closes, period) {
         if (closes.length < period) return null;
@@ -652,8 +822,8 @@
         try {
           // 拿 1h K线最近 60 根 + 24h ticker
           const [klRes, tkRes] = await Promise.all([
-            fetch("https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=60"),
-            fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT")
+            fetch(BINANCE_API + "/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=80"),
+            fetch(BINANCE_API + "/api/v3/ticker/24hr?symbol=BTCUSDT")
           ]);
           const klines = await klRes.json();
           const ticker = await tkRes.json();
@@ -693,8 +863,27 @@
           else if (chgPct < 3)  { indChgVal.className="ind-value mid";  indChgBar.style.background="#f0c040"; }
           else                  { indChgVal.className="ind-value bad";  indChgBar.style.background="var(--red)"; }
 
+          // MACD
+          const macd = calcMACD(closes);
+          let macdScore = 0, macdText = "--";
+          if (macd && indMacdVal) {
+            const bull = macd.histogram > 0, grow = macd.histogram > macd.prevHist;
+            if (macd.prevHist < 0 && macd.histogram > 0)       { macdText="🔀 金叉！";   indMacdVal.className="ind-value good"; macdScore=3; }
+            else if (macd.prevHist > 0 && macd.histogram < 0)  { macdText="🔀 死叉！";   indMacdVal.className="ind-value bad";  macdScore=-3; }
+            else if (bull && grow)                              { macdText="↑ 多头加速"; indMacdVal.className="ind-value good"; macdScore=2; }
+            else if (bull && !grow)                             { macdText="↑ 多头减速"; indMacdVal.className="ind-value mid";  macdScore=1; }
+            else if (!bull && !grow)                            { macdText="↓ 空头加速"; indMacdVal.className="ind-value bad";  macdScore=-2; }
+            else                                                { macdText="↓ 空头减速"; indMacdVal.className="ind-value mid";  macdScore=-1; }
+            indMacdVal.textContent = macdText;
+            const bp = Math.min(100, Math.max(0, 50 + macd.histogram * 2000));
+            indMacdBar.style.width = bp + "%";
+            indMacdBar.style.background = macd.histogram > 0 ? "var(--green)" : "var(--red)";
+          } else if (indMacdVal) {
+            indMacdVal.textContent = "数据不足"; indMacdVal.className = "ind-value mid";
+          }
+
           // ── 综合信号决策 ──
-          let score = 0;
+          let score = macdScore;
           // RSI 评分
           if (rsi < 30) score += 3;
           else if (rsi < 40) score += 2;
@@ -853,8 +1042,8 @@
         resultExtraEl.style.display = "flex";
         stopPctLabelEl.textContent = chStopPct.toFixed(0);
 
+        if (chStartVal) {
         // 止损：总资金亏损 chStopPct% 时必须出
-        // cashLeft + btcBought * stopPrice * (1-sellFeeRate) = chStartVal * (1 - chStopPct/100)
         const cashLeft   = chStartVal - amount;
         const floorTotal = chStartVal * (1 - chStopPct / 100);
         const stopPrice  = (floorTotal - cashLeft) / (btcBought * (1 - sellFeeRate));
@@ -876,6 +1065,12 @@
           targetPriceSubEl.textContent = "买入价需涨 " + pctUp.toFixed(1) + "% 达到翻倍目标";
         } else {
           targetPriceValEl.textContent = "--";
+          targetPriceSubEl.textContent = "";
+        }
+        } else {
+          stopPriceValEl.textContent = "请先设置起始资金";
+          stopPriceSubEl.textContent = "";
+          targetPriceValEl.textContent = "请先设置起始资金";
           targetPriceSubEl.textContent = "";
         }
       }
@@ -925,6 +1120,9 @@
 
       updateChallenge();
       connect();
+
+      // 如果已保存 API Key，自动同步账户
+      if (LS.get("apiKey") && LS.get("apiSecret")) syncAccount();
     </script>
   </body>
 </html>
