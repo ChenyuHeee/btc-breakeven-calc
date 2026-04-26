@@ -374,7 +374,8 @@
         <div class="col-title">📡 买入信号</div>
         <div style="display:flex;align-items:center;gap:6px;">
           <div class="mode-toggle" id="modeToggle">
-            <button class="mode-btn active" id="modeDip">低吸</button>
+            <button class="mode-btn active" id="modeAuto">自动</button>
+            <button class="mode-btn" id="modeDip">低吸</button>
             <button class="mode-btn" id="modeTrend">趋势</button>
           </div>
           <button class="signal-refresh" id="signalRefresh">刷新</button>
@@ -939,7 +940,11 @@
           // ── 综合信号决策 ──
           let score = macdScore;
 
-          if (signalMode === 'dip') {
+          // 自动模式：判断当前是涨势还是震荡/回调，自动选策略
+          const isTrending = rsi > 52 && maDiff > 0.5 && (macd ? macd.histogram > 0 : true);
+          const effectiveMode = signalMode === 'auto' ? (isTrending ? 'trend' : 'dip') : signalMode;
+
+          if (effectiveMode === 'dip') {
             // 低吸模式：寻找超卖/回调机会
             if (rsi < 30) score += 3;
             else if (rsi < 40) score += 2;
@@ -971,7 +976,7 @@
           }
 
           let rsiText, maText, chgText;
-          if (signalMode === 'dip') {
+          if (effectiveMode === 'dip') {
             rsiText = rsi < 35 ? "处于超卖区（历史上这个位置反弹概率较高）"
                     : rsi < 50 ? "未过热，情绪偏冷"
                     : rsi < 65 ? "正常范围，没有明显信号"
@@ -1011,15 +1016,16 @@
             [-2, "⚠️", "趋势走弱，不宜追涨",       "上涨动能减弱，此时入场容易被套",           "sig-no"],
             [-99,"🔴", "趋势反转风险，不建议买入", "多个指标显示趋势可能已见顶",               "sig-no"],
           ];
-          const labels = signalMode === 'dip' ? dipLabels : trendLabels;
+          const labels = effectiveMode === 'dip' ? dipLabels : trendLabels;
           const lv = labels.find(l => score >= l[0]);
           signalCardEl.className = "signal-card " + lv[4];
           signalEmoji.textContent = lv[1];
           signalTitle.textContent = lv[2];
           signalSub.textContent   = lv[3];
 
-          const modeNote = signalMode === 'dip'
-            ? "【低吸模式】在下跌/超卖时给出信号。"
+          const modeNote = signalMode === 'auto'
+            ? (isTrending ? "【自动→趋势】检测到上涨动能，已切换为趋势策略。" : "【自动→低吸】当前无明显上涨趋势，已切换为低吸策略。")
+            : effectiveMode === 'dip' ? "【低吸模式】在下跌/超卖时给出信号。"
             : "【趋势模式】在上涨动能充足时给出信号。";
           signalNote.textContent =
             modeNote + " RSI：" + rsiText + "。均线：" + maText + "。涨跌：" + chgText +
@@ -1030,19 +1036,18 @@
         }
       }
 
-      let signalMode = 'dip'; // 'dip' | 'trend'
-      document.getElementById('modeDip').addEventListener('click', () => {
-        signalMode = 'dip';
-        document.getElementById('modeDip').classList.add('active');
-        document.getElementById('modeTrend').classList.remove('active');
+      let signalMode = 'auto'; // 'auto' | 'dip' | 'trend'
+      function setMode(m) {
+        signalMode = m;
+        ['modeAuto','modeDip','modeTrend'].forEach(id => {
+          const btn = document.getElementById(id);
+          if (btn) btn.classList.toggle('active', id === 'mode' + m.charAt(0).toUpperCase() + m.slice(1));
+        });
         fetchSignal();
-      });
-      document.getElementById('modeTrend').addEventListener('click', () => {
-        signalMode = 'trend';
-        document.getElementById('modeTrend').classList.add('active');
-        document.getElementById('modeDip').classList.remove('active');
-        fetchSignal();
-      });
+      }
+      document.getElementById('modeAuto').addEventListener('click',  () => setMode('auto'));
+      document.getElementById('modeDip').addEventListener('click',   () => setMode('dip'));
+      document.getElementById('modeTrend').addEventListener('click', () => setMode('trend'));
 
       signalRefresh.addEventListener("click", fetchSignal);
       fetchSignal();
