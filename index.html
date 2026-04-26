@@ -1126,7 +1126,9 @@
         const stopPct   = chStopPct || 15;
 
         // ── 买入建议：目标价 / 止损价 ──
-        if (c.isBuySignal && tradePlan.style.display !== "none") {
+        // 只在按钮处于激活状态时更新（避免覆盖下单后的防重复保护）
+        if (c.isBuySignal && tradePlan.style.display !== "none"
+            && execBuyBtn.className.includes("exec-buy")) {
           const bollWidth      = (c.bollUpper && c.bollMid) ? (c.bollUpper - c.bollLower) / c.bollMid * 100 : 5;
           let   lev            = 1;
           if      (c.score >= 5 && c.isTrending && bollWidth < 8)  lev = 3;
@@ -1226,7 +1228,7 @@
         // ── 卖出建议：当前参考价 ──
         if (c.sellScore >= 4 && sellPlan.style.display !== "none") {
           spPrice.textContent = "$" + Math.round(price).toLocaleString();
-          if (hasApiKey && hasBtc) {
+          if (hasApiKey && hasBtc && execSellBtn.className.includes("exec-sell")) {
             const sellQty = +(liveBtcBalance * c.sellRatioPct / 100).toFixed(6);
             execSellBtn.onclick = () => showOrderModal({
               title: "确认卖出 BTC",
