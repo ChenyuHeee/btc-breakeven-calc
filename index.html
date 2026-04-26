@@ -666,7 +666,7 @@
       }
 
       // 弹出确认对话框并在用户确认后下单
-      function showOrderModal({ title, rows, confirmClass, onConfirm }) {
+      function showOrderModal({ title, rows, confirmClass, execBtn, onConfirm }) {
         omTitle.textContent = title;
         omBody.innerHTML = rows.map(([k, v]) =>
           `<div class="order-modal-row"><span>${k}</span><span>${v}</span></div>`
@@ -692,7 +692,13 @@
             omConfirm.textContent = "关闭";
             omConfirm.disabled = false;
             omConfirm.onclick = doClose;
-            setTimeout(syncAccount, 2000); // 2秒后自动刷新余额
+            // 立即禁用下单按钮，防止重复下单，等余额同步后自动刷新
+            if (execBtn) {
+              execBtn.className = "trade-exec-btn exec-disabled";
+              execBtn.textContent = "⏳ 余额同步中...";
+              execBtn.onclick = null;
+            }
+            setTimeout(syncAccount, 1000); // 1秒后同步余额并刷新按钮
           } catch(e) {
             omBody.innerHTML = `<div style="color:var(--red);font-size:0.82rem;word-break:break-word">❌ 下单失败：${e.message}</div>`;
             omConfirm.textContent = "关闭";
@@ -1338,6 +1344,7 @@
                   ["止损参考", "$" + Math.round(stopPrice).toLocaleString()]
                 ],
                 confirmClass: "buy-btn",
+                execBtn: execBuyBtn,
                 onConfirm: () => binanceSignedPost("/api/v3/order", {
                   symbol: "BTCUSDT", side: "BUY", type: "MARKET",
                   quoteOrderQty: buyUsdt
@@ -1421,6 +1428,7 @@
                   ["主要原因", sellReasons.slice(0,2).join(" · ")]
                 ],
                 confirmClass: "sell-btn",
+                execBtn: execSellBtn,
                 onConfirm: () => binanceSignedPost("/api/v3/order", {
                   symbol: "BTCUSDT", side: "SELL", type: "MARKET",
                   quantity: sellQty
