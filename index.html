@@ -417,7 +417,10 @@
               <div class="hm-sub" id="hmStopSub"></div>
             </div>
           </div>
-          <button class="trade-exec-btn exec-sell" id="execHoldSellBtn" style="display:none">⚡ 全部卖出 BTC</button>
+          <div style="display:flex;gap:6px">
+            <button class="trade-exec-btn exec-sell" id="execHoldSellBtn" style="display:none;flex:1">⚡ 卖出可用 BTC</button>
+            <button class="trade-exec-btn exec-sell" id="execHoldSellAllBtn" style="display:none;flex:1">⚡ 取消OCO+全卖</button>
+          </div>
         </div>
         <div class="signal-header">
           <div class="signal-emoji" id="signalEmoji">⏳</div>
@@ -678,8 +681,8 @@
         return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
       }
 
-      // POST 版签名请求（用于下单）
-      async function binanceSignedPost(path, params = {}) {
+      // POST/DELETE 版签名请求（用于下单、取消订单）
+      async function binanceSignedPost(path, params = {}, method = "POST") {
         const apiKey = (LS.get("apiKey") || "").trim();
         const secret = (LS.get("apiSecret") || "").trim();
         if (!apiKey || !secret) throw new Error("未设置 API Key / Secret");
@@ -690,7 +693,7 @@
         const sig   = await hmacSHA256(secret, qBase);
         const body  = qBase + "&signature=" + sig;
         const res   = await fetch(base + path, {
-          method: "POST",
+          method,
           headers: { "X-MBX-APIKEY": apiKey, "Content-Type": "application/x-www-form-urlencoded" },
           body
         });
@@ -1027,7 +1030,8 @@
       const hmTargetSub     = document.getElementById("hmTargetSub");
       const hmStop          = document.getElementById("hmStop");
       const hmStopSub       = document.getElementById("hmStopSub");
-      const execHoldSellBtn = document.getElementById("execHoldSellBtn");
+      const execHoldSellBtn    = document.getElementById("execHoldSellBtn");
+      const execHoldSellAllBtn = document.getElementById("execHoldSellAllBtn");
       const orderModal    = document.getElementById("orderModal");
       const omTitle       = document.getElementById("omTitle");
       const omBody        = document.getElementById("omBody");
@@ -1211,23 +1215,53 @@
           hmTargetSub.textContent = "+" + tgtPct.toFixed(1) + "% （布林上轨）";
           hmStop.textContent      = "$" + Math.round(price * (1 - stopPct / 100)).toLocaleString();
           if (hasApiKey) {
-            const allQty = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
-            execHoldSellBtn.onclick = () => showOrderModal({
-              title: "确认全部卖出",
-              rows: [
-                ["交易对", "BTC / USDT 现货"],
-                ["方向", "市价卖出"],
-                ["卖出数量", allQty + " BTC (可用)"],
-                ["当前参考价", "$" + Math.round(price).toLocaleString()]
-              ],
-              confirmClass: "sell-btn",
-              execBtn: execHoldSellBtn,
-              successMsg: "卖出成功！",
-              onConfirm: () => binanceSignedPost("/api/v3/order", {
-                symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                quantity: allQty
-              })
-            });
+            const freeQty2   = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
+            const lockedQty2 = +(liveBtcBalance - freeQty2).toFixed(6);
+            if (freeQty2 > 0.000001 && execHoldSellBtn.className.includes("exec-sell")) {
+              execHoldSellBtn.onclick = () => showOrderModal({
+                title: "卖出可用 BTC",
+                rows: [
+                  ["交易对", "BTC / USDT 现货"],
+                  ["方向", "市价卖出"],
+                  ["卖出数量", freeQty2 + " BTC (可用)"],
+                  ["当前参考价", "$" + Math.round(price).toLocaleString()]
+                ],
+                confirmClass: "sell-btn",
+                execBtn: execHoldSellBtn,
+                successMsg: "卖出成功！",
+                onConfirm: () => binanceSignedPost("/api/v3/order", {
+                  symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                  quantity: freeQty2
+                })
+              });
+            }
+            if (lockedQty2 > 0.000001 && execHoldSellAllBtn.className.includes("exec-sell")) {
+              execHoldSellAllBtn.onclick = () => showOrderModal({
+                title: "取消 OCO 并全部卖出",
+                rows: [
+                  ["交易对", "BTC / USDT 现货"],
+                  ["步骤 1", "查询并取消未成交 OCO 单"],
+                  ["步骤 2", "市价卖出全部 BTC"],
+                  ["预计数量", liveBtcBalance.toFixed(6) + " BTC"],
+                  ["当前参考价", "$" + Math.round(price).toLocaleString()]
+                ],
+                confirmClass: "sell-btn",
+                execBtn: execHoldSellAllBtn,
+                successMsg: "全部卖出成功！",
+                onConfirm: async () => {
+                  const openOrders = await binanceSigned("/api/v3/openOrderList");
+                  const btcOrders  = openOrders.filter(o => o.symbol === "BTCUSDT" || (o.orders && o.orders[0]?.symbol === "BTCUSDT"));
+                  for (const o of btcOrders) {
+                    await binanceSignedPost("/api/v3/orderList", { symbol: "BTCUSDT", orderListId: o.orderListId }, "DELETE");
+                  }
+                  await new Promise(r => setTimeout(r, 600));
+                  return binanceSignedPost("/api/v3/order", {
+                    symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                    quantity: +liveBtcBalance.toFixed(6)
+                  });
+                }
+              });
+            }
           }
         }
 
@@ -1687,30 +1721,71 @@
             hmStop.textContent      = "$" + Math.round(price * (1 - stpPct / 100)).toLocaleString();
             hmStopSub.textContent   = "-" + stpPct + "% 止损";
 
-            // 一键全部卖出按钮
+            // 卖出可用 BTC 按钮（free 部分）
             if (hasApiKey) {
-              const allQty = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
-              const lockedQty = +(liveBtcBalance - (liveBtcFree ?? liveBtcBalance)).toFixed(6);
-              execHoldSellBtn.style.display = "block";
-              execHoldSellBtn.textContent   = "⚡ 全部卖出 " + allQty + " BTC" + (lockedQty > 0.000001 ? " (" + lockedQty.toFixed(6) + " 挂单中)" : "");
-              execHoldSellBtn.onclick = () => showOrderModal({
-                title: "确认全部卖出",
-                rows: [
-                  ["交易对", "BTC / USDT 现货"],
-                  ["方向", "市价卖出"],
-                  ["卖出数量", allQty + " BTC (可用)" + (lockedQty > 0.000001 ? "，" + lockedQty.toFixed(6) + " BTC 挂单锁定" : "")],
-                  ["当前参考价", "$" + Math.round(price).toLocaleString()]
-                ],
-                confirmClass: "sell-btn",
-                execBtn: execHoldSellBtn,
-                successMsg: "卖出成功！",
-                onConfirm: () => binanceSignedPost("/api/v3/order", {
-                  symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                  quantity: allQty
-                })
-              });
+              const freeQty   = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
+              const lockedQty = +(liveBtcBalance - freeQty).toFixed(6);
+              if (freeQty > 0.000001) {
+                execHoldSellBtn.style.display = "block";
+                execHoldSellBtn.textContent   = "⚡ 卖出可用 " + freeQty + " BTC";
+                execHoldSellBtn.onclick = () => showOrderModal({
+                  title: "卖出可用 BTC",
+                  rows: [
+                    ["交易对", "BTC / USDT 现货"],
+                    ["方向", "市价卖出"],
+                    ["卖出数量", freeQty + " BTC (可用)"],
+                    ["当前参考价", "$" + Math.round(price).toLocaleString()]
+                  ],
+                  confirmClass: "sell-btn",
+                  execBtn: execHoldSellBtn,
+                  successMsg: "卖出成功！",
+                  onConfirm: () => binanceSignedPost("/api/v3/order", {
+                    symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                    quantity: freeQty
+                  })
+                });
+              } else {
+                execHoldSellBtn.style.display = "none";
+              }
+              // 取消 OCO + 全卖 按钮
+              if (lockedQty > 0.000001) {
+                execHoldSellAllBtn.style.display = "block";
+                execHoldSellAllBtn.textContent   = "⚡ 取消OCO+全卖";
+                execHoldSellAllBtn.onclick = () => showOrderModal({
+                  title: "取消 OCO 并全部卖出",
+                  rows: [
+                    ["交易对", "BTC / USDT 现货"],
+                    ["步骤 1", "查询并取消未成交 OCO 单"],
+                    ["步骤 2", "市价卖出全部 BTC"],
+                    ["预计数量", liveBtcBalance.toFixed(6) + " BTC"],
+                    ["当前参考价", "$" + Math.round(price).toLocaleString()]
+                  ],
+                  confirmClass: "sell-btn",
+                  execBtn: execHoldSellAllBtn,
+                  successMsg: "全部卖出成功！",
+                  onConfirm: async () => {
+                    // 1. 查询未成交 OCO 单
+                    const openOrders = await binanceSigned("/api/v3/openOrderList");
+                    const btcOrders  = openOrders.filter(o => o.symbol === "BTCUSDT" || (o.orders && o.orders[0]?.symbol === "BTCUSDT"));
+                    // 2. 依次取消
+                    for (const o of btcOrders) {
+                      await binanceSignedPost("/api/v3/orderList", { symbol: "BTCUSDT", orderListId: o.orderListId }, "DELETE");
+                    }
+                    // 3. 市价卖出全部（稍延确保解锁）
+                    await new Promise(r => setTimeout(r, 600));
+                    const totalQty = +(liveBtcBalance).toFixed(6);
+                    return binanceSignedPost("/api/v3/order", {
+                      symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                      quantity: totalQty
+                    });
+                  }
+                });
+              } else {
+                execHoldSellAllBtn.style.display = "none";
+              }
             } else {
-              execHoldSellBtn.style.display = "none";
+              execHoldSellBtn.style.display    = "none";
+              execHoldSellAllBtn.style.display = "none";
             }
           } else {
             holdingMonitor.style.display = "none";
