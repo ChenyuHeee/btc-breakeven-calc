@@ -203,7 +203,7 @@
       /* 卖出建议面板 */
       .sell-plan { margin-top: 10px; border-top: 2px solid var(--red); padding-top: 10px; display: none; }
       /* 持仓监控面板 */
-      .holding-monitor { margin-top: 10px; border-top: 1.5px solid var(--border); padding-top: 10px; display: none; }
+      .holding-monitor { margin-bottom: 10px; border-bottom: 1.5px solid var(--border); padding-bottom: 10px; display: none; }
       .holding-monitor-title { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
       .holding-monitor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
       .hm-box { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
@@ -392,6 +392,33 @@
         <button class="signal-refresh" id="signalRefresh">刷新</button>
       </div>
       <div class="col-body" id="signalCard">
+        <!-- 持仓监控：持有 BTC 时常驻显示 -->
+        <div class="holding-monitor" id="holdingMonitor" style="display:none">
+          <div class="holding-monitor-title">📊 持仓监控</div>
+          <div class="holding-monitor-grid">
+            <div class="hm-box">
+              <div class="hm-label">持仓 BTC</div>
+              <div class="hm-val" id="hmBtc">--</div>
+              <div class="hm-sub" id="hmBtcSub"></div>
+            </div>
+            <div class="hm-box">
+              <div class="hm-label">浮动盈亏</div>
+              <div class="hm-val" id="hmPnl">--</div>
+              <div class="hm-sub" id="hmPnlSub"></div>
+            </div>
+            <div class="hm-box hm-green">
+              <div class="hm-label">止盈参考价</div>
+              <div class="hm-val" id="hmTarget" style="color:var(--green)">--</div>
+              <div class="hm-sub" id="hmTargetSub"></div>
+            </div>
+            <div class="hm-box hm-red">
+              <div class="hm-label">止损参考价</div>
+              <div class="hm-val" id="hmStop" style="color:var(--red)">--</div>
+              <div class="hm-sub" id="hmStopSub"></div>
+            </div>
+          </div>
+          <button class="trade-exec-btn exec-sell" id="execHoldSellBtn" style="display:none">⚡ 全部卖出 BTC</button>
+        </div>
         <div class="signal-header">
           <div class="signal-emoji" id="signalEmoji">⏳</div>
           <div>
@@ -457,33 +484,6 @@
             </div>
           </div>
           <button class="trade-exec-btn exec-disabled" id="execBuyBtn">🔒 一键买入（需先同步账户）</button>
-        </div>
-        <!-- 持仓监控：持有 BTC 时常驻显示 -->
-        <div class="holding-monitor" id="holdingMonitor" style="display:none">
-          <div class="holding-monitor-title">📊 持仓监控</div>
-          <div class="holding-monitor-grid">
-            <div class="hm-box">
-              <div class="hm-label">持仓 BTC</div>
-              <div class="hm-val" id="hmBtc">--</div>
-              <div class="hm-sub" id="hmBtcSub"></div>
-            </div>
-            <div class="hm-box">
-              <div class="hm-label">浮动盈亏</div>
-              <div class="hm-val" id="hmPnl">--</div>
-              <div class="hm-sub" id="hmPnlSub"></div>
-            </div>
-            <div class="hm-box hm-green">
-              <div class="hm-label">止盈参考价</div>
-              <div class="hm-val" id="hmTarget" style="color:var(--green)">--</div>
-              <div class="hm-sub" id="hmTargetSub"></div>
-            </div>
-            <div class="hm-box hm-red">
-              <div class="hm-label">止损参考价</div>
-              <div class="hm-val" id="hmStop" style="color:var(--red)">--</div>
-              <div class="hm-sub" id="hmStopSub"></div>
-            </div>
-          </div>
-          <button class="trade-exec-btn exec-sell" id="execHoldSellBtn" style="display:none">⚡ 全部卖出 BTC</button>
         </div>
         <div class="sell-plan" id="sellPlan">
           <div class="sell-plan-title">🚨 卖出建议</div>
