@@ -162,6 +162,14 @@
       .result-mini-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
       .formula-note { font-size: 0.72rem; color: var(--muted); }
 
+      /* Mode toggle */
+      .mode-toggle { display:flex; background:var(--bg); border:1.5px solid var(--border); border-radius:14px; overflow:hidden; }
+      .mode-btn {
+        font-size:0.75rem; padding:3px 10px; border:none; background:transparent;
+        cursor:pointer; font-family:inherit; color:var(--muted); transition:all .15s;
+      }
+      .mode-btn.active { background:var(--accent); color:#fff; }
+
       /* Signal column */
       .signal-refresh {
         font-size: 0.78rem; padding: 4px 10px; border-radius: 14px;
@@ -364,7 +372,13 @@
     <div class="col">
       <div class="col-header">
         <div class="col-title">📡 买入信号</div>
-        <button class="signal-refresh" id="signalRefresh">刷新</button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div class="mode-toggle" id="modeToggle">
+            <button class="mode-btn active" id="modeDip">低吸</button>
+            <button class="mode-btn" id="modeTrend">趋势</button>
+          </div>
+          <button class="signal-refresh" id="signalRefresh">刷新</button>
+        </div>
       </div>
       <div class="col-body" id="signalCard">
         <div class="signal-header">
@@ -924,71 +938,111 @@
 
           // ── 综合信号决策 ──
           let score = macdScore;
-          // RSI 评分
-          if (rsi < 30) score += 3;
-          else if (rsi < 40) score += 2;
-          else if (rsi < 50) score += 1;
-          else if (rsi > 70) score -= 3;
-          else if (rsi > 60) score -= 1;
-          // MA 评分
-          if (maDiff < -2) score += 2;
-          else if (maDiff < 0) score += 1;
-          else if (maDiff > 3) score -= 2;
-          else if (maDiff > 1.5) score -= 1;
-          // 24h 涨跌评分
-          if (chgPct < -5) score += 2;
-          else if (chgPct < -2) score += 1;
-          else if (chgPct > 5) score -= 2;
-          else if (chgPct > 3) score -= 1;
 
-          let rsiText, maText, chgText;
-          rsiText = rsi < 35 ? "处于超卖区（历史上这个位置反弹概率较高）"
-                  : rsi < 50 ? "未过热，情绪偏冷"
-                  : rsi < 65 ? "正常范围，没有明显信号"
-                  : "处于超买区（短期涨太多，追高风险大）";
-          maText  = maDiff < -1 ? "价格低于20小时均线，属于阶段低位"
-                  : maDiff < 1.5 ? "价格在均线附近，位置中性"
-                  : "价格高于均线较多，追高需谨慎";
-          chgText = chgPct < -3 ? "今日大跌，可能是低吸机会"
-                  : chgPct < 0 ? "今日小幅下跌"
-                  : chgPct < 3 ? "今日小幅上涨"
-                  : "今日涨幅较大，追高风险增加";
-
-          if (score >= 4) {
-            signalCardEl.className = "signal-card sig-buy";
-            signalEmoji.textContent = "🟢";
-            signalTitle.textContent = "现在是相对好的买入时机";
-            signalSub.textContent   = "多个指标同时显示价格偏低，可以考虑买入";
-          } else if (score >= 2) {
-            signalCardEl.className = "signal-card sig-buy";
-            signalEmoji.textContent = "🟡";
-            signalTitle.textContent = "可以小仓位试探";
-            signalSub.textContent   = "指标偏向有利，但信号不算强，建议先买一部分";
-          } else if (score >= 0) {
-            signalCardEl.className = "signal-card sig-wait";
-            signalEmoji.textContent = "🟡";
-            signalTitle.textContent = "观望，信号不明";
-            signalSub.textContent   = "当前没有明显的低位信号，等等看";
-          } else if (score >= -2) {
-            signalCardEl.className = "signal-card sig-no";
-            signalEmoji.textContent = "🔴";
-            signalTitle.textContent = "暂时不建议买入";
-            signalSub.textContent   = "价格偏高或刚涨过一波，等回调再进";
+          if (signalMode === 'dip') {
+            // 低吸模式：寻找超卖/回调机会
+            if (rsi < 30) score += 3;
+            else if (rsi < 40) score += 2;
+            else if (rsi < 50) score += 1;
+            else if (rsi > 70) score -= 3;
+            else if (rsi > 60) score -= 1;
+            if (maDiff < -2) score += 2;
+            else if (maDiff < 0) score += 1;
+            else if (maDiff > 3) score -= 2;
+            else if (maDiff > 1.5) score -= 1;
+            if (chgPct < -5) score += 2;
+            else if (chgPct < -2) score += 1;
+            else if (chgPct > 5) score -= 2;
+            else if (chgPct > 3) score -= 1;
           } else {
-            signalCardEl.className = "signal-card sig-no";
-            signalEmoji.textContent = "🔴";
-            signalTitle.textContent = "不建议现在买";
-            signalSub.textContent   = "多个指标显示价格过热，追高亏钱概率大";
+            // 趋势模式：寻找上涨动能延续机会
+            if (rsi > 50 && rsi <= 70) score += 2;   // 健康上涨区间
+            else if (rsi > 70 && rsi <= 80) score += 1; // 强势但未极端超买
+            else if (rsi > 80) score -= 2;            // 极端超买，随时回调
+            else if (rsi < 45) score -= 2;            // 趋势未起
+            if (maDiff > 0.5 && maDiff < 5) score += 2;  // 价格站上均线、趋势确立
+            else if (maDiff >= 5 && maDiff < 10) score += 1; // 偏高但趋势强
+            else if (maDiff >= 10) score -= 2;        // 偏离过大，过热
+            else if (maDiff < 0) score -= 1;          // 价格在均线下，趋势未起
+            if (chgPct > 5) score += 2;               // 强劲上涨动能
+            else if (chgPct > 2) score += 1;          // 温和上涨
+            else if (chgPct < -3) score -= 2;         // 跌破趋势
+            else if (chgPct < 0) score -= 1;          // 小跌，趋势偏弱
           }
 
+          let rsiText, maText, chgText;
+          if (signalMode === 'dip') {
+            rsiText = rsi < 35 ? "处于超卖区（历史上这个位置反弹概率较高）"
+                    : rsi < 50 ? "未过热，情绪偏冷"
+                    : rsi < 65 ? "正常范围，没有明显信号"
+                    : "处于超买区（短期涨太多，追高风险大）";
+            maText  = maDiff < -1 ? "价格低于20小时均线，属于阶段低位"
+                    : maDiff < 1.5 ? "价格在均线附近，位置中性"
+                    : "价格高于均线较多，追高需谨慎";
+            chgText = chgPct < -3 ? "今日大跌，可能是低吸机会"
+                    : chgPct < 0 ? "今日小幅下跌"
+                    : chgPct < 3 ? "今日小幅上涨"
+                    : "今日涨幅较大，追高风险增加";
+          } else {
+            rsiText = rsi > 80 ? "RSI 极端超买，注意短期回调风险"
+                    : rsi > 60 ? "RSI 进入强势区，趋势健康"
+                    : rsi > 50 ? "RSI 刚过中线，趋势初步确立"
+                    : "RSI 低于50，上涨动能不足";
+            maText  = maDiff > 5 ? "价格大幅站上均线，趋势强劲"
+                    : maDiff > 0 ? "价格站上20小时均线，趋势向上"
+                    : "价格在均线下方，趋势尚未确立";
+            chgText = chgPct > 5 ? "今日大涨，动能强"
+                    : chgPct > 2 ? "今日温和上涨，趋势延续"
+                    : chgPct >= 0 ? "今日几乎持平，观察方向"
+                    : "今日下跌，上涨动能减弱";
+          }
+
+          const dipLabels = [
+            [4,  "🟢", "现在是相对好的买入时机",  "多个指标显示价格偏低，可以考虑买入",      "sig-buy"],
+            [2,  "🟡", "可以小仓位试探",          "指标偏向有利，但信号不算强，先买一部分",   "sig-buy"],
+            [0,  "🟡", "观望，信号不明",           "当前没有明显的低位信号，等等看",           "sig-wait"],
+            [-2, "🔴", "暂时不建议买入",           "价格偏高或刚涨过一波，等回调再进",         "sig-no"],
+            [-99,"🔴", "不建议现在买",             "多个指标显示价格过热，追高亏钱概率大",     "sig-no"],
+          ];
+          const trendLabels = [
+            [4,  "🚀", "趋势强劲，可以顺势买入",   "上涨动能充足，价格站上均线，可跟随趋势",   "sig-buy"],
+            [2,  "📈", "趋势向上，可小仓位跟进",   "多个指标显示上涨趋势延续，建议轻仓跟随",   "sig-buy"],
+            [0,  "🟡", "趋势不明，暂时观望",       "动能不足，等待趋势方向更清晰",             "sig-wait"],
+            [-2, "⚠️", "趋势走弱，不宜追涨",       "上涨动能减弱，此时入场容易被套",           "sig-no"],
+            [-99,"🔴", "趋势反转风险，不建议买入", "多个指标显示趋势可能已见顶",               "sig-no"],
+          ];
+          const labels = signalMode === 'dip' ? dipLabels : trendLabels;
+          const lv = labels.find(l => score >= l[0]);
+          signalCardEl.className = "signal-card " + lv[4];
+          signalEmoji.textContent = lv[1];
+          signalTitle.textContent = lv[2];
+          signalSub.textContent   = lv[3];
+
+          const modeNote = signalMode === 'dip'
+            ? "【低吸模式】在下跌/超卖时给出信号。"
+            : "【趋势模式】在上涨动能充足时给出信号。";
           signalNote.textContent =
-            "RSI：" + rsiText + "。均线：" + maText + "。涨跌：" + chgText +
+            modeNote + " RSI：" + rsiText + "。均线：" + maText + "。涨跌：" + chgText +
             "。（数据来自 Binance 1小时K线，仅供参考，不构成投资建议）";
         } catch (e) {
           signalTitle.textContent = "获取数据失败";
           signalSub.textContent   = "请检查网络连接后点击刷新";
         }
       }
+
+      let signalMode = 'dip'; // 'dip' | 'trend'
+      document.getElementById('modeDip').addEventListener('click', () => {
+        signalMode = 'dip';
+        document.getElementById('modeDip').classList.add('active');
+        document.getElementById('modeTrend').classList.remove('active');
+        fetchSignal();
+      });
+      document.getElementById('modeTrend').addEventListener('click', () => {
+        signalMode = 'trend';
+        document.getElementById('modeTrend').classList.add('active');
+        document.getElementById('modeDip').classList.remove('active');
+        fetchSignal();
+      });
 
       signalRefresh.addEventListener("click", fetchSignal);
       fetchSignal();
