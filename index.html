@@ -962,18 +962,28 @@
           const rsiBothOversold  = rsi1h < 40 && rsi4h < 45;
           const rsiBothOverbought= rsi1h > 65 && rsi4h > 60;
 
-          // 自动判断市场状态（使用 4h RSI 更准确）
-          const isTrending = rsi1h > 52 && rsi4h > 50 && maDiff > 0.5 && (macd ? macd.histogram > 0 : true);
+          // 自动判断市场状态
+          // 严格路径：双周期 RSI 确认 + 价格站上均线
+          const trendByRsi  = rsi1h > 52 && rsi4h > 50 && maDiff > 0.5;
+          // 动能路径：MACD 多头 + EMA 金叉 + RSI 站上 48（即使 RSI 没超过 52）
+          const emaCrossUp  = ema9 != null && ema21 != null ? ema9 > ema21 : false;
+          const macdBull    = macd ? macd.histogram > 0 : false;
+          const trendByMomentum = macdBull && emaCrossUp && rsi1h >= 48 && maDiff > 0;
+          const isTrending  = trendByRsi || trendByMomentum;
           const effectiveMode = isTrending ? 'trend' : 'dip';
 
           if (effectiveMode === 'dip') {
+            // 低吸模式：只有价格真正处于低位才给正分
+            // MACD 在低吸模式中只作为"止跌确认"，不独立产生买入信号
             if      (rsiBothOversold)      score += 4;  // 1h+4h 双重超卖，强信号
             else if (rsi1h < 30)           score += 3;
             else if (rsi1h < 40)           score += 2;
             else if (rsi1h < 50)           score += 1;
-            else if (rsiBothOverbought)    score -= 4;  // 双重超买，强卖信号
+            // RSI ≥ 50 在低吸模式下说明没有低位信号，MACD 看多也是追高，减分
+            else if (rsiBothOverbought)    score -= 4;
             else if (rsi1h > 70)           score -= 3;
-            else if (rsi1h > 60)           score -= 1;
+            else if (rsi1h > 60)           score -= 2;
+            else /* rsi1h 50~60 */         score -= 1;  // 价格不低，不适合低吸
             if      (maDiff < -2)          score += 2;
             else if (maDiff < 0)           score += 1;
             else if (maDiff > 3)           score -= 2;
@@ -1052,8 +1062,10 @@
           signalSub.textContent   = lv[3];
 
           const modeNote = isTrending
-            ? "【趋势模式】RSI 双周期偶正 + 价格站上均线 + MACD 多头。"
-            : "【回调模式】当前无明显上涨趋势，寻找低位机会。";
+            ? (trendByMomentum && !trendByRsi
+                ? "【趋势模式·动能触发】MACD 多头 + EMA 金叉确认上涨动能，适合顺势跟进。"
+                : "【趋势模式】RSI 双周期确认 + 价格站上均线 + MACD 多头，趋势成立。")
+            : "【低吸模式】动能指标无法确认趋势，当前信号基于价格是否处于低位（布林下轨/超卖区）。";
           signalNote.textContent = modeNote + " " + rsiBothNote + " " + bollNote + " " + volNote +
             "（数据：Binance 1h+4h K线，仅供参考，不构成投资建议）";
 
