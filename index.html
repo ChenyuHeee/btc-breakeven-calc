@@ -61,7 +61,7 @@
       .dashboard {
         height: calc(100% - var(--topbar-h));
         display: grid;
-        grid-template-columns: 300px 1fr 300px;
+        grid-template-columns: 340px 1fr;
         gap: 10px;
         padding: 10px;
         overflow: hidden;
@@ -271,7 +271,7 @@
       <span id="wsLabel">--</span>
     </div>
     <div class="topbar-spacer"></div>
-    <button class="use-price-btn" id="usePriceBtn">用当前价买入</button>
+
   </div>
 
   <!-- Dashboard -->
@@ -316,64 +316,6 @@
           <div class="ch-trades-title">近期 BTC 交易</div>
           <div class="ch-trades" id="chTrades"></div>
         </div>
-      </div>
-    </div>
-
-    <!-- Center: Calculator -->
-    <div class="col">
-      <div class="col-header">
-        <div class="col-title">📊 买入计划</div>
-      </div>
-      <div class="col-body">
-        <div>
-          <label class="calc-label" for="buyPrice">买入价格（USDT）</label>
-          <div class="input-wrap">
-            <input id="buyPrice" type="number" inputmode="decimal" min="0" step="any" placeholder="例如 77000" />
-            <span class="input-unit">USDT</span>
-          </div>
-        </div>
-        <div>
-          <label class="calc-label" for="amount">投入金额（USDT）</label>
-          <div class="input-wrap">
-            <input id="amount" type="number" inputmode="decimal" min="0" step="any" placeholder="例如 1000" />
-            <span class="input-unit">USDT</span>
-          </div>
-        </div>
-        <div>
-          <span class="fee-toggle" id="feeToggle">▸ 手续费设置（默认 0.1%）</span>
-          <div class="fee-section hidden" id="feeSection" style="margin-top:8px">
-            <div class="fee-row">
-              <div class="input-wrap">
-                <input id="buyFeeRate" type="number" inputmode="decimal" min="0" step="any" placeholder="买入费率" />
-                <span class="input-unit">%</span>
-              </div>
-              <div class="input-wrap">
-                <input id="sellFeeRate" type="number" inputmode="decimal" min="0" step="any" placeholder="卖出费率" />
-                <span class="input-unit">%</span>
-              </div>
-            </div>
-            <div class="fee-note">普通用户 0.1%，BNB 抵扣约 0.075%</div>
-          </div>
-        </div>
-        <div class="result-box" id="resultBox">
-          <div class="result-label">卖出不亏的最低价格</div>
-          <div class="result-price" id="resultPrice"><sup>USDT </sup>--</div>
-          <div class="result-verdict" id="resultVerdict" style="display:none;"></div>
-          <div class="result-detail" id="resultDetail"></div>
-        </div>
-        <div class="result-extra" id="resultExtra" style="display:none;">
-          <div class="result-mini stop">
-            <div class="result-mini-label">🛑 止损价（亏 <span id="stopPctLabel">15</span>%）</div>
-            <div class="result-mini-val" id="stopPriceVal">--</div>
-            <div class="result-mini-sub" id="stopPriceSub"></div>
-          </div>
-          <div class="result-mini tgt">
-            <div class="result-mini-label">🎯 翻倍目标卖价</div>
-            <div class="result-mini-val" id="targetPriceVal">--</div>
-            <div class="result-mini-sub" id="targetPriceSub"></div>
-          </div>
-        </div>
-        <div class="formula-note" id="formulaNote"></div>
       </div>
     </div>
 
@@ -539,18 +481,7 @@
       const livePriceEl     = document.getElementById("livePrice");
       const wsDotEl         = document.getElementById("wsDot");
       const wsLabelEl       = document.getElementById("wsLabel");
-      const usePriceBtn     = document.getElementById("usePriceBtn");
-      const feeToggle       = document.getElementById("feeToggle");
-      const feeSection      = document.getElementById("feeSection");
-      const buyPriceInput   = document.getElementById("buyPrice");
-      const amountInput     = document.getElementById("amount");
-      const buyFeeRateInput = document.getElementById("buyFeeRate");
-      const sellFeeRateInput= document.getElementById("sellFeeRate");
-      const resultBox       = document.getElementById("resultBox");
-      const resultPriceEl   = document.getElementById("resultPrice");
-      const resultVerdictEl = document.getElementById("resultVerdict");
-      const resultDetailEl  = document.getElementById("resultDetail");
-      const formulaNoteEl   = document.getElementById("formulaNote");
+
 
       // ── Challenge card elements ──
       const challengeCardEl = document.getElementById("challengeCard");
@@ -577,12 +508,7 @@
       const chNowEl         = document.getElementById("chNow");
       const chPnlEl         = document.getElementById("chPnl");
       const chGapEl         = document.getElementById("chGap");
-      const resultExtraEl   = document.getElementById("resultExtra");
-      const stopPctLabelEl  = document.getElementById("stopPctLabel");
-      const stopPriceValEl  = document.getElementById("stopPriceVal");
-      const stopPriceSubEl  = document.getElementById("stopPriceSub");
-      const targetPriceValEl= document.getElementById("targetPriceVal");
-      const targetPriceSubEl= document.getElementById("targetPriceSub");
+
 
       // ── Persisted config ──
       const LS = {
@@ -596,13 +522,14 @@
       let liveUsdtBalance = null;
       let liveBtcBalance  = null;
 
-      // Restore API keys
+      // Restore API keys & settings
       apiKeyInput.value    = LS.get("apiKey")    || "";
       apiSecretInput.value = LS.get("apiSecret") || "";
       proxyInput.value     = (LS.get("proxy") || "").replace(/^https?:\/\//, "");
       if (chStartVal !== null) chStartInput.value = chStartVal;
       chMultInput.value = chMultVal;
       chStopInput.value = chStopPct;
+      let feeOpen = false; // kept for future use
 
       // ── HMAC-SHA256 (SubtleCrypto) ──
       async function hmacSHA256(secret, message) {
@@ -735,7 +662,7 @@
         if (sv > 0)  { chStartVal = sv; LS.set("start", sv); }
         if (mv >= 1) { chMultVal  = mv; LS.set("mult",  mv); }
         if (pv > 0 && pv <= 50) { chStopPct = pv; LS.set("stop", pv); }
-        updateChallenge(); calculate();
+        updateChallenge();
         if (k && s) syncAccount();
         settingsModal.classList.remove("open");
       });
@@ -748,7 +675,6 @@
         if (m >= 1) { chMultVal  = m; LS.set("mult",  m); }
         if (p > 0 && p <= 50) { chStopPct = p; LS.set("stop", p); }
         updateChallenge();
-        calculate();
       }
 
       [chStartInput, chMultInput, chStopInput].forEach(el => el.addEventListener("input", saveChConfig));
@@ -769,32 +695,18 @@
         chTargetValEl.textContent = target ? fmt(target) : "--";
         const chStartEl2 = document.getElementById("chStart");
         if (chStartEl2) chStartEl2.textContent = startVal ? fmt(startVal) + " U" : "--";
-        stopPctLabelEl.textContent = chStopPct.toFixed(0);
 
         let totalNow;
         if (liveUsdtBalance !== null) {
-          // 使用 Binance 实时余额
           const btcVal = (liveBtcBalance && Number.isFinite(currentMarketPrice) && currentMarketPrice > 0)
             ? liveBtcBalance * currentMarketPrice : 0;
           totalNow = liveUsdtBalance + btcVal;
         } else {
-          // 降级：用表单数据推算
-          const buyPrice    = parseFloat(buyPriceInput.value);
-          const amount      = parseFloat(amountInput.value);
-          const buyFeeRate  = (parseFloat(buyFeeRateInput.value  || "0.1")) / 100;
-          const sellFeeRate = (parseFloat(sellFeeRateInput.value || "0.1")) / 100;
-          const hasPosition = Number.isFinite(buyPrice) && buyPrice > 0 && Number.isFinite(amount) && amount > 0;
-          const btcBought   = hasPosition ? (amount / buyPrice) * (1 - buyFeeRate) : 0;
-          const cashLeft    = startVal ? startVal - (hasPosition ? amount : 0) : 0;
-          let posValue = 0;
-          if (hasPosition && Number.isFinite(currentMarketPrice) && currentMarketPrice > 0)
-            posValue = btcBought * currentMarketPrice * (1 - sellFeeRate);
-          else if (hasPosition) posValue = amount;
-          totalNow = startVal ? cashLeft + posValue : null;
+          totalNow = null;
         }
 
         const chNowEl2 = document.getElementById("chNow");
-        if (chNowEl2) chNowEl2.textContent = liveUsdtBalance !== null ? fmt(liveUsdtBalance) + " U" : (totalNow ? fmt(totalNow) + " U" : "未持仓");
+        if (chNowEl2) chNowEl2.textContent = liveUsdtBalance !== null ? fmt(liveUsdtBalance) + " U" : (totalNow ? fmt(totalNow) + " U" : "--");
 
         if (totalNow != null && startVal) {
           const pnl      = totalNow - startVal;
@@ -857,24 +769,6 @@
       let currentMarketPrice = null;
       let socket = null;
       let reconnectTimer = null;
-      let feeOpen = false;
-
-      // ── Restore saved inputs ──
-      const saved = LS.get("inputs");
-      if (saved) {
-        if (saved.buyPrice)   buyPriceInput.value   = saved.buyPrice;
-        if (saved.amount)     amountInput.value     = saved.amount;
-        if (saved.buyFeeRate) buyFeeRateInput.value  = saved.buyFeeRate;
-        if (saved.sellFeeRate)sellFeeRateInput.value = saved.sellFeeRate;
-      }
-      function saveInputs() {
-        LS.set("inputs", {
-          buyPrice:    buyPriceInput.value,
-          amount:      amountInput.value,
-          buyFeeRate:  buyFeeRateInput.value,
-          sellFeeRate: sellFeeRateInput.value
-        });
-      }
 
       // ── RSI 计算 ──
       function calcRSI(closes, period = 14) {
@@ -1164,8 +1058,9 @@
             "（数据：Binance 1h+4h K线，仅供参考，不构成投资建议）";
 
           // ── 交易建议 ──
-          const capital    = parseFloat(LS.get("ch_start") || 0);
-          const stopPct    = parseFloat(LS.get("ch_stop")  || 15);
+          // 可用资金：优先用 Binance 同步的实际 USDT 余额，降级用设置中的起始资金
+          const capital    = liveUsdtBalance !== null ? liveUsdtBalance : (chStartVal || 0);
+          const stopPct    = chStopPct || 15;
           const isBuySignal = lv[4] === "sig-buy";
 
           if (isBuySignal) {
@@ -1227,128 +1122,14 @@
 
       signalRefresh.addEventListener("click", fetchSignal);
       fetchSignal();
-      setInterval(fetchSignal, 5 * 60 * 1000); // 每5分钟自动刷新
-
-      feeToggle.addEventListener("click", () => {
-        feeOpen = !feeOpen;
-        feeSection.classList.toggle("hidden", !feeOpen);
-        feeToggle.textContent = feeOpen
-          ? "▾ 收起手续费设置"
-          : "▸ 展开手续费设置（默认：买入 0.1% · 卖出 0.1%）";
-      });
+      setInterval(fetchSignal, 5 * 60 * 1000);
 
       function fmt(n, d = 2) {
         if (!Number.isFinite(n)) return "--";
         return n.toLocaleString("zh-CN", { minimumFractionDigits: d, maximumFractionDigits: d });
       }
 
-      function parseNonNeg(v) {
-        const n = parseFloat(v);
-        return Number.isFinite(n) && n >= 0 ? n : NaN;
-      }
 
-      function calculate() {
-        const buyPrice    = parseNonNeg(buyPriceInput.value);
-        const amount      = parseNonNeg(amountInput.value);
-        const buyFeeRate  = parseNonNeg(buyFeeRateInput.value  || "0.1") / 100;
-        const sellFeeRate = parseNonNeg(sellFeeRateInput.value || "0.1") / 100;
-
-        saveInputs();
-        updateChallenge();
-
-        resultBox.className = "result-box";
-        resultPriceEl.innerHTML = "<sup>USDT </sup>--";
-        resultVerdictEl.style.display = "none";
-        resultVerdictEl.className = "result-verdict";
-        resultDetailEl.textContent = "";
-        formulaNoteEl.textContent = "";
-        resultExtraEl.style.display = "none";
-
-        if (!Number.isFinite(buyPrice) || !Number.isFinite(amount)) return;
-        if (buyPrice <= 0 || amount <= 0) return;
-
-        // 买到的 BTC（已扣买入手续费）
-        const btcBought = (amount / buyPrice) * (1 - buyFeeRate);
-        if (btcBought <= 0) return;
-
-        // 回本卖价：netUsdt = btcBought * P * (1 - sellFeeRate) = amount
-        const breakEven = amount / (btcBought * (1 - sellFeeRate));
-
-        resultPriceEl.innerHTML = "<sup>USDT </sup>" + fmt(breakEven, 2);
-        formulaNoteEl.textContent =
-          "买到 " + fmt(btcBought, 6) + " BTC，" +
-          "买入手续费 " + (buyFeeRate * 100).toFixed(2) + "% · " +
-          "卖出手续费 " + (sellFeeRate * 100).toFixed(2) + "%";
-
-        if (Number.isFinite(currentMarketPrice) && currentMarketPrice > 0) {
-          const gap          = currentMarketPrice - breakEven;
-          const netIfSellNow = btcBought * currentMarketPrice * (1 - sellFeeRate);
-          const pnl          = netIfSellNow - amount;
-
-          if (gap > 0.5) {
-            resultBox.className = "result-box green";
-            resultVerdictEl.className = "result-verdict green";
-            resultVerdictEl.textContent =
-              "✅ 好消息：当前市价（" + fmt(currentMarketPrice) + " USDT）已高于回本价，" +
-              "现在卖可以赚约 " + fmt(pnl) + " USDT";
-          } else if (Math.abs(gap) <= 0.5) {
-            resultVerdictEl.className = "result-verdict neutral";
-            resultVerdictEl.textContent =
-              "⚖️ 当前市价（" + fmt(currentMarketPrice) + " USDT）与回本价非常接近，卖出基本不赚不亏";
-          } else {
-            resultBox.className = "result-box red";
-            resultVerdictEl.className = "result-verdict red";
-            resultVerdictEl.textContent =
-              "⚠️ 当前市价（" + fmt(currentMarketPrice) + " USDT）低于回本价，" +
-              "现在卖会亏约 " + fmt(Math.abs(pnl)) + " USDT，" +
-              "还需涨 " + fmt(Math.abs(gap)) + " USDT 才能回本";
-          }
-          resultVerdictEl.style.display = "block";
-          resultDetailEl.textContent =
-            "你花 " + fmt(amount) + " USDT 买到 " + fmt(btcBought, 6) + " BTC，" +
-            "只要卖价超过 " + fmt(breakEven) + " USDT 就不亏。";
-        } else {
-          resultDetailEl.textContent =
-            "你花 " + fmt(amount) + " USDT 可以买到约 " + fmt(btcBought, 6) + " BTC，" +
-            "卖价只要高于 " + fmt(breakEven) + " USDT 就不亏。";
-        }
-
-        // ── 止损价 & 目标卖价 ──
-        resultExtraEl.style.display = "flex";
-        stopPctLabelEl.textContent = chStopPct.toFixed(0);
-
-        if (chStartVal) {
-        // 止损：总资金亏损 chStopPct% 时必须出
-        const cashLeft   = chStartVal - amount;
-        const floorTotal = chStartVal * (1 - chStopPct / 100);
-        const stopPrice  = (floorTotal - cashLeft) / (btcBought * (1 - sellFeeRate));
-        if (stopPrice > 0) {
-          stopPriceValEl.textContent = fmt(stopPrice) + " USDT";
-          stopPriceSubEl.textContent = "价格跌到这里必须止损出局，保住剩余本金";
-        } else {
-          stopPriceValEl.textContent = "无需止损";
-          stopPriceSubEl.textContent = "即使跌至 0，损失也在承受范围内";
-        }
-
-        // 目标卖价：总资金达到 chStartVal * chMultVal
-        // cashLeft + btcBought * targetP * (1-sellFeeRate) = chStartVal * chMultVal
-        const targetTotal = chStartVal * chMultVal;
-        const targetPrice = (targetTotal - cashLeft) / (btcBought * (1 - sellFeeRate));
-        if (targetPrice > 0) {
-          targetPriceValEl.textContent = fmt(targetPrice) + " USDT";
-          const pctUp = ((targetPrice / buyPrice) - 1) * 100;
-          targetPriceSubEl.textContent = "买入价需涨 " + pctUp.toFixed(1) + "% 达到翻倍目标";
-        } else {
-          targetPriceValEl.textContent = "--";
-          targetPriceSubEl.textContent = "";
-        }
-        } else {
-          stopPriceValEl.textContent = "请先设置起始资金";
-          stopPriceSubEl.textContent = "";
-          targetPriceValEl.textContent = "请先设置起始资金";
-          targetPriceSubEl.textContent = "";
-        }
-      }
 
       function setWsState(state) {
         wsDotEl.className = "ws-dot " + state;
@@ -1376,22 +1157,10 @@
             livePriceEl.classList.add("flash");
             livePriceEl.textContent = fmt(price, 2);
             currentMarketPrice = price;
-            calculate();
             updateChallenge();
           } catch (_) {}
         });
       }
-
-      usePriceBtn.addEventListener("click", () => {
-        if (!Number.isFinite(currentMarketPrice)) return;
-        buyPriceInput.value = currentMarketPrice.toFixed(2);
-        calculate();
-        buyPriceInput.focus();
-      });
-
-      [buyPriceInput, amountInput, buyFeeRateInput, sellFeeRateInput].forEach(el =>
-        el.addEventListener("input", calculate)
-      );
 
       updateChallenge();
       connect();
