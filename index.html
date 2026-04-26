@@ -105,6 +105,10 @@
       .ch-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
       .ch-box { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
       .ch-box-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 3px; }
+      .ch-holding { margin-top: 7px; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
+      .ch-holding-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; }
+      .ch-holding-label { color: var(--muted); }
+      .ch-holding-val { font-weight: 700; }
       .ch-box-val { font-size: 0.9rem; font-weight: 700; }
       .ch-sync-err-msg {
         background: var(--red-bg); border: 1.5px solid var(--red);
@@ -352,6 +356,16 @@
           <div class="ch-box">
             <div class="ch-box-label">距目标</div>
             <div class="ch-box-val" id="chGap">--</div>
+          </div>
+        </div>
+        <div class="ch-holding" id="chHolding" style="display:none">
+          <div class="ch-holding-row">
+            <span class="ch-holding-label">💵 USDT 余额</span>
+            <span class="ch-holding-val" id="chUsdtHold">--</span>
+          </div>
+          <div class="ch-holding-row">
+            <span class="ch-holding-label">₿ BTC 持仓</span>
+            <span class="ch-holding-val" id="chBtcHold">--</span>
           </div>
         </div>
         <div id="chTradesWrap" style="display:none;">
@@ -854,7 +868,27 @@
         }
 
         const chNowEl2 = document.getElementById("chNow");
-        if (chNowEl2) chNowEl2.textContent = liveUsdtBalance !== null ? fmt(liveUsdtBalance) + " U" : (totalNow ? fmt(totalNow) + " U" : "--");
+        if (chNowEl2) chNowEl2.textContent = totalNow != null ? fmt(totalNow) + " U" : (liveUsdtBalance !== null ? fmt(liveUsdtBalance) + " U" : "--");
+
+        // 持仓明细
+        const chHoldingEl  = document.getElementById("chHolding");
+        const chUsdtHoldEl = document.getElementById("chUsdtHold");
+        const chBtcHoldEl  = document.getElementById("chBtcHold");
+        if (chHoldingEl && liveUsdtBalance !== null) {
+          chHoldingEl.style.display = "flex";
+          chUsdtHoldEl.textContent = fmt(liveUsdtBalance) + " USDT";
+          if (liveBtcBalance && liveBtcBalance > 0.000001) {
+            const btcUsd = liveBtcBalance * (currentMarketPrice || 0);
+            chBtcHoldEl.textContent = liveBtcBalance.toFixed(6) + " BTC"
+              + (btcUsd > 0 ? " (≈ " + fmt(btcUsd) + " U)" : "");
+            chBtcHoldEl.style.color = "var(--green)";
+          } else {
+            chBtcHoldEl.textContent = "0 BTC";
+            chBtcHoldEl.style.color = "var(--muted)";
+          }
+        } else if (chHoldingEl) {
+          chHoldingEl.style.display = "none";
+        }
 
         if (totalNow != null && startVal) {
           const pnl      = totalNow - startVal;
