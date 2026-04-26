@@ -703,7 +703,7 @@
       }
 
       // 弹出确认对话框并在用户确认后下单
-      function showOrderModal({ title, rows, confirmClass, execBtn, ocoParams, onConfirm }) {
+      function showOrderModal({ title, rows, confirmClass, execBtn, ocoParams, successMsg, onConfirm }) {
         omTitle.textContent = title;
         omBody.innerHTML = rows.map(([k, v]) =>
           `<div class="order-modal-row"><span>${k}</span><span>${v}</span></div>`
@@ -723,7 +723,7 @@
             const avg    = result.fills && result.fills.length
               ? (result.fills.reduce((s, f) => s + parseFloat(f.price) * parseFloat(f.qty), 0) /
                  result.fills.reduce((s, f) => s + parseFloat(f.qty), 0)).toFixed(1) : "";
-            omBody.innerHTML = `<div style="text-align:center;padding:10px 0;font-size:0.95rem;color:var(--green)">✅ 买入成功！</div>`
+            omBody.innerHTML = `<div style="text-align:center;padding:10px 0;font-size:0.95rem;color:var(--green)">✅ ${successMsg || '下单成功！'}</div>`
               + `<div class="order-modal-row"><span>成交数量</span><span>${filled} BTC</span></div>`
               + (avg ? `<div class="order-modal-row"><span>均价</span><span>$${parseFloat(avg).toLocaleString()}</span></div>` : "");
 
@@ -1550,6 +1550,7 @@
                 ],
                 confirmClass: "sell-btn",
                 execBtn: execHoldSellBtn,
+                successMsg: "卖出成功！",
                 onConfirm: () => binanceSignedPost("/api/v3/order", {
                   symbol: "BTCUSDT", side: "SELL", type: "MARKET",
                   quantity: allQty
@@ -1593,6 +1594,7 @@
                 ],
                 confirmClass: "sell-btn",
                 execBtn: execSellBtn,
+                successMsg: "卖出成功！",
                 onConfirm: () => binanceSignedPost("/api/v3/order", {
                   symbol: "BTCUSDT", side: "SELL", type: "MARKET",
                   quantity: sellQty
