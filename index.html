@@ -655,7 +655,8 @@
       let chMultVal  = LS.get("mult")  ?? 2;
       let chStopPct  = LS.get("stop")  ?? 15;
       let liveUsdtBalance = null;
-      let liveBtcBalance  = null;
+      let liveBtcBalance  = null;  // free + locked（持仓显示用）
+      let liveBtcFree     = null;  // 仅 free（卖出下单用）
       let _signalCache    = null;
 
       // Restore API keys & settings
@@ -848,7 +849,8 @@
           const bals = account.balances || [];
           liveUsdtBalance = parseFloat(bals.find(b => b.asset === "USDT")?.free || 0);
           const btcAsset  = bals.find(b => b.asset === "BTC");
-          liveBtcBalance  = parseFloat(btcAsset?.free || 0) + parseFloat(btcAsset?.locked || 0);
+          liveBtcFree    = parseFloat(btcAsset?.free   || 0);
+          liveBtcBalance = liveBtcFree + parseFloat(btcAsset?.locked || 0);
 
           const chUsdtEl = document.getElementById("chNow");
           if (chUsdtEl) chUsdtEl.textContent = fmt(liveUsdtBalance) + " U";
@@ -1209,13 +1211,13 @@
           hmTargetSub.textContent = "+" + tgtPct.toFixed(1) + "% （布林上轨）";
           hmStop.textContent      = "$" + Math.round(price * (1 - stopPct / 100)).toLocaleString();
           if (hasApiKey) {
-            const allQty = +liveBtcBalance.toFixed(6);
+            const allQty = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
             execHoldSellBtn.onclick = () => showOrderModal({
               title: "确认全部卖出",
               rows: [
                 ["交易对", "BTC / USDT 现货"],
                 ["方向", "市价卖出"],
-                ["卖出数量", allQty + " BTC (全部)"],
+                ["卖出数量", allQty + " BTC (可用)"],
                 ["当前参考价", "$" + Math.round(price).toLocaleString()]
               ],
               confirmClass: "sell-btn",
@@ -1233,7 +1235,7 @@
         if (c.sellScore >= 4 && sellPlan.style.display !== "none") {
           spPrice.textContent = "$" + Math.round(price).toLocaleString();
           if (hasApiKey && hasBtc && execSellBtn.className.includes("exec-sell")) {
-            const sellQty = +(liveBtcBalance * c.sellRatioPct / 100).toFixed(6);
+            const sellQty = +((liveBtcFree ?? liveBtcBalance) * c.sellRatioPct / 100).toFixed(6);
             execSellBtn.onclick = () => showOrderModal({
               title: "确认卖出 BTC",
               rows: [
@@ -1687,15 +1689,16 @@
 
             // 一键全部卖出按钮
             if (hasApiKey) {
-              const allQty = +liveBtcBalance.toFixed(6);
+              const allQty = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
+              const lockedQty = +(liveBtcBalance - (liveBtcFree ?? liveBtcBalance)).toFixed(6);
               execHoldSellBtn.style.display = "block";
-              execHoldSellBtn.textContent   = "⚡ 全部卖出 " + allQty + " BTC";
+              execHoldSellBtn.textContent   = "⚡ 全部卖出 " + allQty + " BTC" + (lockedQty > 0.000001 ? " (" + lockedQty.toFixed(6) + " 挂单中)" : "");
               execHoldSellBtn.onclick = () => showOrderModal({
                 title: "确认全部卖出",
                 rows: [
                   ["交易对", "BTC / USDT 现货"],
                   ["方向", "市价卖出"],
-                  ["卖出数量", allQty + " BTC (全部)"],
+                  ["卖出数量", allQty + " BTC (可用)" + (lockedQty > 0.000001 ? "，" + lockedQty.toFixed(6) + " BTC 挂单锁定" : "")],
                   ["当前参考价", "$" + Math.round(price).toLocaleString()]
                 ],
                 confirmClass: "sell-btn",
@@ -1720,7 +1723,7 @@
             spActionSub.textContent = isUrgent ? "多指标同时超买，过热风险高" : "信号偏强，逢高分批出";
             spRatio.textContent     = sellRatioPct + "%";
             spRatioSub.textContent  = hasBtc
-              ? ("≈ " + (liveBtcBalance * sellRatioPct / 100).toFixed(5) + " BTC")
+              ? ("≈ " + ((liveBtcFree ?? liveBtcBalance) * sellRatioPct / 100).toFixed(5) + " BTC")
               : (sellRatioPct === 100 ? "全仓" : "持仓的 " + sellRatioPct + "%");
             spPrice.textContent     = "$" + Math.round(price).toLocaleString();
             spPriceSub.textContent  = "当前价，可挂稍高限价单";
@@ -1729,7 +1732,7 @@
 
             // 卖出按钮
             if (hasApiKey && hasBtc) {
-              const sellQty = +(liveBtcBalance * sellRatioPct / 100).toFixed(6);
+              const sellQty = +((liveBtcFree ?? liveBtcBalance) * sellRatioPct / 100).toFixed(6);
               execSellBtn.className = "trade-exec-btn exec-sell";
               execSellBtn.textContent = "⚡ 一键卖出 " + sellQty + " BTC (" + sellRatioPct + "%)";
               execSellBtn.onclick = () => showOrderModal({
