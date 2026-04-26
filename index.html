@@ -188,6 +188,15 @@
       .ind-bar-wrap { height: 5px; background: #e8e0d4; border-radius: 3px; overflow: hidden; }
       .ind-bar { height: 100%; border-radius: 3px; transition: width .4s; }
       .signal-note { font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
+      /* 交易建议 */
+      .trade-plan { margin-top: 10px; border-top: 1.5px solid var(--border); padding-top: 10px; display: none; }
+      .trade-plan-title { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+      .trade-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+      .tp-box { background: var(--bg); border-radius: 9px; padding: 8px 10px; }
+      .tp-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
+      .tp-val { font-size: 0.95rem; font-weight: 700; }
+      .tp-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+      .tp-no-signal { font-size: 0.82rem; color: var(--muted); text-align: center; padding: 8px 0; }
       #signalCard.sig-buy  { background: var(--green-bg); }
       #signalCard.sig-no   { background: var(--red-bg); }
       #signalCard.sig-wait { background: #fdfaf6; }
@@ -415,6 +424,31 @@
           </div>
         </div>
         <div class="signal-note" id="signalNote"></div>
+        <div class="trade-plan" id="tradePlan">
+          <div class="trade-plan-title">📋 交易建议</div>
+          <div class="trade-plan-grid">
+            <div class="tp-box">
+              <div class="tp-label">建议仓位</div>
+              <div class="tp-val" id="tpPosition">--</div>
+              <div class="tp-sub" id="tpPositionSub"></div>
+            </div>
+            <div class="tp-box">
+              <div class="tp-label">建议杠杆</div>
+              <div class="tp-val" id="tpLeverage">--</div>
+              <div class="tp-sub" id="tpLeverageSub"></div>
+            </div>
+            <div class="tp-box">
+              <div class="tp-label">目标卖出价</div>
+              <div class="tp-val" id="tpTarget">--</div>
+              <div class="tp-sub" id="tpTargetSub"></div>
+            </div>
+            <div class="tp-box">
+              <div class="tp-label">止损参考价</div>
+              <div class="tp-val" id="tpStop">--</div>
+              <div class="tp-sub" id="tpStopSub"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -798,6 +832,15 @@
       const signalSub     = document.getElementById("signalSub");
       const signalNote    = document.getElementById("signalNote");
       const signalRefresh = document.getElementById("signalRefresh");
+      const tradePlan     = document.getElementById("tradePlan");
+      const tpPosition    = document.getElementById("tpPosition");
+      const tpPositionSub = document.getElementById("tpPositionSub");
+      const tpLeverage    = document.getElementById("tpLeverage");
+      const tpLeverageSub = document.getElementById("tpLeverageSub");
+      const tpTarget      = document.getElementById("tpTarget");
+      const tpTargetSub   = document.getElementById("tpTargetSub");
+      const tpStop        = document.getElementById("tpStop");
+      const tpStopSub     = document.getElementById("tpStopSub");
       const indRsiVal     = document.getElementById("indRsiVal");
       const indRsiBar     = document.getElementById("indRsiBar");
       const indRsi4hVal   = document.getElementById("indRsi4hVal");
@@ -1119,6 +1162,61 @@
             : "【回调模式】当前无明显上涨趋势，寻找低位机会。";
           signalNote.textContent = modeNote + " " + rsiBothNote + " " + bollNote + " " + volNote +
             "（数据：Binance 1h+4h K线，仅供参考，不构成投资建议）";
+
+          // ── 交易建议 ──
+          const capital    = parseFloat(LS.get("ch_start") || 0);
+          const stopPct    = parseFloat(LS.get("ch_stop")  || 15);
+          const isBuySignal = lv[4] === "sig-buy";
+
+          if (isBuySignal) {
+            tradePlan.style.display = "block";
+
+            // 仓位比例：根据 score
+            const posPct = score >= 5 ? 30 : score >= 3 ? 20 : 10;
+            tpPosition.textContent = posPct + "%";
+            tpPosition.style.color = "var(--green)";
+            if (capital > 0) {
+              const posUsdt = (capital * posPct / 100).toFixed(0);
+              tpPositionSub.textContent = "≈ " + posUsdt + " USDT";
+            } else {
+              tpPositionSub.textContent = "（在设置中填入起始资金可计算金额）";
+            }
+
+            // 杠杆：强信号趋势可上 3x，其余保守
+            // 布林带带宽衡量波动：宽 = 高波动 = 降杠杆
+            const bollWidth = boll ? (boll.upper - boll.lower) / boll.mid * 100 : 5;
+            let lev = 1;
+            if      (score >= 5 && isTrending && bollWidth < 8)  lev = 3;
+            else if (score >= 5 && bollWidth < 10)               lev = 2;
+            else if (score >= 3 && bollWidth < 8)                lev = 2;
+            else                                                  lev = 1;
+            tpLeverage.textContent = lev + "x";
+            tpLeverage.style.color = lev >= 3 ? "var(--red)" : lev === 2 ? "#c26a27" : "var(--green)";
+            tpLeverageSub.textContent = lev === 1 ? "现货，无爆仓风险" : lev === 2 ? "轻杠杆，控制好止损" : "高杠杆，严格止损";
+
+            // 目标卖出价：低吸模式用布林上轨，趋势模式用 +涨幅
+            let targetPct;
+            if (effectiveMode === 'dip') {
+              // 目标：boll 上轨，或至少 +5%
+              const bollTargetPct = boll ? (boll.upper - price) / price * 100 : 0;
+              targetPct = Math.max(5, Math.min(20, bollTargetPct));
+            } else {
+              targetPct = score >= 5 ? 12 : score >= 3 ? 8 : 5;
+            }
+            const targetPrice = price * (1 + targetPct / 100);
+            tpTarget.textContent = "$" + Math.round(targetPrice).toLocaleString();
+            tpTarget.style.color = "var(--green)";
+            tpTargetSub.textContent = "+" + targetPct.toFixed(1) + "% 目标";
+
+            // 止损价：基于设置的止损比例，杠杆越高止损越紧
+            const effectiveStopPct = lev > 1 ? Math.min(stopPct, Math.floor(80 / lev)) : stopPct;
+            const stopPrice = price * (1 - effectiveStopPct / 100);
+            tpStop.textContent = "$" + Math.round(stopPrice).toLocaleString();
+            tpStop.style.color = "var(--red)";
+            tpStopSub.textContent = "-" + effectiveStopPct + "% 止损";
+          } else {
+            tradePlan.style.display = "none";
+          }
         } catch (e) {
           signalTitle.textContent = "获取数据失败";
           signalSub.textContent   = "请检查网络连接后点击刷新";
