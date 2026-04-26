@@ -384,19 +384,29 @@
         </div>
         <div class="indicators">
           <div class="ind-box">
-            <div class="ind-label">RSI(14)</div>
+            <div class="ind-label">RSI(14) 1h</div>
             <div class="ind-value" id="indRsiVal">--</div>
             <div class="ind-bar-wrap"><div class="ind-bar" id="indRsiBar" style="width:0%;background:#ccc"></div></div>
           </div>
           <div class="ind-box">
-            <div class="ind-label">MACD 趋势</div>
+            <div class="ind-label">RSI(14) 4h</div>
+            <div class="ind-value" id="indRsi4hVal">--</div>
+            <div class="ind-bar-wrap"><div class="ind-bar" id="indRsi4hBar" style="width:0%;background:#ccc"></div></div>
+          </div>
+          <div class="ind-box">
+            <div class="ind-label">MACD + EMA</div>
             <div class="ind-value" id="indMacdVal">--</div>
             <div class="ind-bar-wrap"><div class="ind-bar" id="indMacdBar" style="width:50%;background:#ccc"></div></div>
           </div>
           <div class="ind-box">
-            <div class="ind-label">价格 vs MA20</div>
-            <div class="ind-value" id="indMaVal">--</div>
-            <div class="ind-bar-wrap"><div class="ind-bar" id="indMaBar" style="width:50%;background:#ccc"></div></div>
+            <div class="ind-label">布林带位置</div>
+            <div class="ind-value" id="indBollVal">--</div>
+            <div class="ind-bar-wrap"><div class="ind-bar" id="indBollBar" style="width:50%;background:#ccc"></div></div>
+          </div>
+          <div class="ind-box">
+            <div class="ind-label">成交量</div>
+            <div class="ind-value" id="indVolVal">--</div>
+            <div class="ind-bar-wrap"><div class="ind-bar" id="indVolBar" style="width:50%;background:#ccc"></div></div>
           </div>
           <div class="ind-box">
             <div class="ind-label">24h 涨跌幅</div>
@@ -790,8 +800,14 @@
       const signalRefresh = document.getElementById("signalRefresh");
       const indRsiVal     = document.getElementById("indRsiVal");
       const indRsiBar     = document.getElementById("indRsiBar");
+      const indRsi4hVal   = document.getElementById("indRsi4hVal");
+      const indRsi4hBar   = document.getElementById("indRsi4hBar");
       const indMaVal      = document.getElementById("indMaVal");
       const indMaBar      = document.getElementById("indMaBar");
+      const indBollVal    = document.getElementById("indBollVal");
+      const indBollBar    = document.getElementById("indBollBar");
+      const indVolVal     = document.getElementById("indVolVal");
+      const indVolBar     = document.getElementById("indVolBar");
       const indChgVal     = document.getElementById("indChgVal");
       const indChgBar     = document.getElementById("indChgBar");
 
@@ -862,66 +878,98 @@
         return slice.reduce((a, b) => a + b, 0) / period;
       }
 
+      // ── EMA 计算 ──
+      function calcEMA(closes, period) {
+        if (closes.length < period) return null;
+        const k = 2 / (period + 1);
+        let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+        for (let i = period; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+        return ema;
+      }
+
+      // ── 布林带计算 ──
+      function calcBoll(closes, period = 20, mult = 2) {
+        if (closes.length < period) return null;
+        const slice = closes.slice(-period);
+        const mid = slice.reduce((a, b) => a + b, 0) / period;
+        const std = Math.sqrt(slice.reduce((s, v) => s + (v - mid) ** 2, 0) / period);
+        return { upper: mid + mult * std, mid, lower: mid - mult * std };
+      }
+
       // ── 信号分析 ──
       async function fetchSignal() {
         signalTitle.textContent = "分析中...";
-        signalSub.textContent   = "正在获取数据";
+        signalSub.textContent   = "正在获取多周期数据";
         signalCardEl.className  = "signal-card";
         try {
-          // 拿 1h K线最近 60 根 + 24h ticker
-          const [klRes, tkRes] = await Promise.all([
-            fetch(BINANCE_API + "/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=80"),
+          // 同时拿 1h (100根) + 4h (60根) + 24h ticker
+          const [kl1hRes, kl4hRes, tkRes] = await Promise.all([
+            fetch(BINANCE_API + "/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
+            fetch(BINANCE_API + "/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=60"),
             fetch(BINANCE_API + "/api/v3/ticker/24hr?symbol=BTCUSDT")
           ]);
-          const klines = await klRes.json();
-          const ticker = await tkRes.json();
+          const klines1h = await kl1hRes.json();
+          const klines4h = await kl4hRes.json();
+          const ticker   = await tkRes.json();
 
-          // kline: [openTime, open, high, low, close, ...]
-          const closes = klines.map(k => parseFloat(k[4]));
-          const rsi    = calcRSI(closes, 14);
-          const ma20   = calcMA(closes, 20);
-          const price  = closes[closes.length - 1];
-          const chgPct = parseFloat(ticker.priceChangePercent);
+          // ── 基础数据 ──
+          const closes1h = klines1h.map(k => parseFloat(k[4]));
+          const closes4h = klines4h.map(k => parseFloat(k[4]));
+          const vols1h   = klines1h.map(k => parseFloat(k[5]));
+          const price    = closes1h[closes1h.length - 1];
+          const chgPct   = parseFloat(ticker.priceChangePercent);
 
-          // ── 展示各指标 ──
-          // RSI bar: 0~100
-          indRsiVal.textContent = rsi != null ? rsi.toFixed(1) : "--";
-          indRsiBar.style.width = (rsi ?? 50) + "%";
-          if (rsi < 35)       { indRsiVal.className="ind-value good"; indRsiBar.style.background="var(--green)"; }
-          else if (rsi < 55)  { indRsiVal.className="ind-value mid";  indRsiBar.style.background="#f0c040"; }
-          else                { indRsiVal.className="ind-value bad";  indRsiBar.style.background="var(--red)"; }
-
-          // MA 偏离：price vs MA20
+          // ── 计算指标 ──
+          const rsi1h  = calcRSI(closes1h, 14);
+          const rsi4h  = calcRSI(closes4h, 14);
+          const ma20   = calcMA(closes1h, 20);
+          const boll   = calcBoll(closes1h, 20, 2);
+          const macd   = calcMACD(closes1h);
+          const ema9   = calcEMA(closes1h, 9);
+          const ema21  = calcEMA(closes1h, 21);
           const maDiff = ma20 ? ((price - ma20) / ma20 * 100) : 0;
-          indMaVal.textContent = ma20
-            ? (maDiff >= 0 ? "+" : "") + maDiff.toFixed(2) + "% vs MA20"
-            : "--";
-          // bar: 50% = at MA, 0=far below, 100=far above
-          const maBarPct = Math.min(100, Math.max(0, 50 + maDiff * 5));
-          indMaBar.style.width = maBarPct + "%";
-          if (maDiff < -1)        { indMaVal.className="ind-value good"; indMaBar.style.background="var(--green)"; }
-          else if (maDiff < 1.5)  { indMaVal.className="ind-value mid";  indMaBar.style.background="#f0c040"; }
-          else                    { indMaVal.className="ind-value bad";  indMaBar.style.background="var(--red)"; }
 
-          // 24h 涨跌
-          indChgVal.textContent = (chgPct >= 0 ? "+" : "") + chgPct.toFixed(2) + "%";
-          const chgBarPct = Math.min(100, Math.max(0, 50 + chgPct * 3));
-          indChgBar.style.width = chgBarPct + "%";
-          if (chgPct < -3)      { indChgVal.className="ind-value good"; indChgBar.style.background="var(--green)"; }
-          else if (chgPct < 3)  { indChgVal.className="ind-value mid";  indChgBar.style.background="#f0c040"; }
-          else                  { indChgVal.className="ind-value bad";  indChgBar.style.background="var(--red)"; }
+          // 成交量：当前 vs 过去20根均量
+          const volAvg = vols1h.slice(-21, -1).reduce((a, b) => a + b, 0) / 20;
+          const volCur = vols1h[vols1h.length - 1];
+          const volRatio = volAvg > 0 ? volCur / volAvg : 1;
 
-          // MACD
-          const macd = calcMACD(closes);
+          // 布林带位置 0~100 (0=下轨, 100=上轨)
+          const bollPct = boll && (boll.upper - boll.lower) > 0
+            ? Math.min(100, Math.max(0, (price - boll.lower) / (boll.upper - boll.lower) * 100))
+            : 50;
+
+          // ── 显示指标 ──
+
+          // RSI 1h
+          indRsiVal.textContent = rsi1h != null ? rsi1h.toFixed(1) : "--";
+          indRsiBar.style.width = (rsi1h ?? 50) + "%";
+          if      (rsi1h < 35) { indRsiVal.className="ind-value good"; indRsiBar.style.background="var(--green)"; }
+          else if (rsi1h < 55) { indRsiVal.className="ind-value mid";  indRsiBar.style.background="#f0c040"; }
+          else                 { indRsiVal.className="ind-value bad";  indRsiBar.style.background="var(--red)"; }
+
+          // RSI 4h
+          if (indRsi4hVal) {
+            indRsi4hVal.textContent = rsi4h != null ? rsi4h.toFixed(1) : "--";
+            indRsi4hBar.style.width = (rsi4h ?? 50) + "%";
+            if      (rsi4h < 35) { indRsi4hVal.className="ind-value good"; indRsi4hBar.style.background="var(--green)"; }
+            else if (rsi4h < 55) { indRsi4hVal.className="ind-value mid";  indRsi4hBar.style.background="#f0c040"; }
+            else                 { indRsi4hVal.className="ind-value bad";  indRsi4hBar.style.background="var(--red)"; }
+          }
+
+          // MACD + EMA 金死叉
           let macdScore = 0, macdText = "--";
           if (macd && indMacdVal) {
             const bull = macd.histogram > 0, grow = macd.histogram > macd.prevHist;
-            if (macd.prevHist < 0 && macd.histogram > 0)       { macdText="🔀 金叉！";   indMacdVal.className="ind-value good"; macdScore=3; }
-            else if (macd.prevHist > 0 && macd.histogram < 0)  { macdText="🔀 死叉！";   indMacdVal.className="ind-value bad";  macdScore=-3; }
-            else if (bull && grow)                              { macdText="↑ 多头加速"; indMacdVal.className="ind-value good"; macdScore=2; }
-            else if (bull && !grow)                             { macdText="↑ 多头减速"; indMacdVal.className="ind-value mid";  macdScore=1; }
-            else if (!bull && !grow)                            { macdText="↓ 空头加速"; indMacdVal.className="ind-value bad";  macdScore=-2; }
-            else                                                { macdText="↓ 空头减速"; indMacdVal.className="ind-value mid";  macdScore=-1; }
+            const emaCross = ema9 && ema21 ? (ema9 > ema21 ? " + EMA金叉" : " + EMA死叉") : "";
+            if      (macd.prevHist < 0 && macd.histogram > 0) { macdText="🔀 金叉!"+emaCross; indMacdVal.className="ind-value good"; macdScore=3; }
+            else if (macd.prevHist > 0 && macd.histogram < 0) { macdText="🔀 死叉!"+emaCross; indMacdVal.className="ind-value bad";  macdScore=-3; }
+            else if (bull &&  grow) { macdText="↑ 多头加速"+emaCross; indMacdVal.className="ind-value good"; macdScore=2; }
+            else if (bull && !grow) { macdText="↑ 多头减速"+emaCross; indMacdVal.className="ind-value mid";  macdScore=1; }
+            else if (!bull && !grow){ macdText="↓ 空头加速"+emaCross; indMacdVal.className="ind-value bad";  macdScore=-2; }
+            else                    { macdText="↓ 空头减速"+emaCross; indMacdVal.className="ind-value mid";  macdScore=-1; }
+            // EMA 金死叉额外加减分
+            if (ema9 && ema21) { if (ema9 > ema21) macdScore += 1; else macdScore -= 1; }
             indMacdVal.textContent = macdText;
             const bp = Math.min(100, Math.max(0, 50 + macd.histogram * 2000));
             indMacdBar.style.width = bp + "%";
@@ -930,84 +978,132 @@
             indMacdVal.textContent = "数据不足"; indMacdVal.className = "ind-value mid";
           }
 
-          // ── 综合信号决策 ──
+          // 布林带
+          if (indBollVal && boll) {
+            const bollLabel = bollPct < 20 ? "接近下轨 (低位)"
+                            : bollPct < 40 ? "中下区间"
+                            : bollPct < 60 ? "中间位置"
+                            : bollPct < 80 ? "中上区间"
+                            : "接近上轨 (高位)";
+            indBollVal.textContent = bollLabel;
+            indBollBar.style.width = bollPct + "%";
+            if      (bollPct < 25) { indBollVal.className="ind-value good"; indBollBar.style.background="var(--green)"; }
+            else if (bollPct < 65) { indBollVal.className="ind-value mid";  indBollBar.style.background="#f0c040"; }
+            else                   { indBollVal.className="ind-value bad";  indBollBar.style.background="var(--red)"; }
+          }
+
+          // 成交量
+          if (indVolVal) {
+            const isGreen = price >= parseFloat(klines1h[klines1h.length - 1][1]); // close >= open
+            const volLabel = volRatio > 2   ? (isGreen ? "放量上涨 ✓" : "放量下跌 ✗")
+                           : volRatio > 1.3 ? (isGreen ? "量能偏大↑" : "量能偏大↓")
+                           : volRatio > 0.7 ? "量能正常"
+                           : "缩量，谨慎";
+            indVolVal.textContent = volRatio.toFixed(2) + "x  " + volLabel;
+            indVolBar.style.width = Math.min(100, volRatio * 50) + "%";
+            if      (volRatio > 1.3 &&  isGreen) { indVolVal.className="ind-value good"; indVolBar.style.background="var(--green)"; }
+            else if (volRatio > 1.3 && !isGreen) { indVolVal.className="ind-value bad";  indVolBar.style.background="var(--red)"; }
+            else                                  { indVolVal.className="ind-value mid";  indVolBar.style.background="#f0c040"; }
+          }
+
+          // 24h 涨跌
+          indChgVal.textContent = (chgPct >= 0 ? "+" : "") + chgPct.toFixed(2) + "%";
+          const chgBarPct = Math.min(100, Math.max(0, 50 + chgPct * 3));
+          indChgBar.style.width = chgBarPct + "%";
+          if      (chgPct < -3) { indChgVal.className="ind-value good"; indChgBar.style.background="var(--green)"; }
+          else if (chgPct <  3) { indChgVal.className="ind-value mid";  indChgBar.style.background="#f0c040"; }
+          else                  { indChgVal.className="ind-value bad";  indChgBar.style.background="var(--red)"; }
+
+          // ── 综合评分 ──
           let score = macdScore;
 
-          // 自动模式：判断当前是涨势还是震荡/回调，自动选策略
-          const isTrending = rsi > 52 && maDiff > 0.5 && (macd ? macd.histogram > 0 : true);
+          // 多周期共振：1h 和 4h RSI 方向一致则增强信号
+          const rsiAgree = rsi1h != null && rsi4h != null
+            && ((rsi1h < 50 && rsi4h < 50) || (rsi1h > 55 && rsi4h > 55));
+          const rsiBothOversold  = rsi1h < 40 && rsi4h < 45;
+          const rsiBothOverbought= rsi1h > 65 && rsi4h > 60;
+
+          // 自动判断市场状态（使用 4h RSI 更准确）
+          const isTrending = rsi1h > 52 && rsi4h > 50 && maDiff > 0.5 && (macd ? macd.histogram > 0 : true);
           const effectiveMode = isTrending ? 'trend' : 'dip';
 
           if (effectiveMode === 'dip') {
-            // 低吸模式：寻找超卖/回调机会
-            if (rsi < 30) score += 3;
-            else if (rsi < 40) score += 2;
-            else if (rsi < 50) score += 1;
-            else if (rsi > 70) score -= 3;
-            else if (rsi > 60) score -= 1;
-            if (maDiff < -2) score += 2;
-            else if (maDiff < 0) score += 1;
-            else if (maDiff > 3) score -= 2;
-            else if (maDiff > 1.5) score -= 1;
-            if (chgPct < -5) score += 2;
-            else if (chgPct < -2) score += 1;
-            else if (chgPct > 5) score -= 2;
-            else if (chgPct > 3) score -= 1;
+            if      (rsiBothOversold)      score += 4;  // 1h+4h 双重超卖，强信号
+            else if (rsi1h < 30)           score += 3;
+            else if (rsi1h < 40)           score += 2;
+            else if (rsi1h < 50)           score += 1;
+            else if (rsiBothOverbought)    score -= 4;  // 双重超买，强卖信号
+            else if (rsi1h > 70)           score -= 3;
+            else if (rsi1h > 60)           score -= 1;
+            if      (maDiff < -2)          score += 2;
+            else if (maDiff < 0)           score += 1;
+            else if (maDiff > 3)           score -= 2;
+            else if (maDiff > 1.5)         score -= 1;
+            // 布林带低位加分
+            if      (bollPct < 15)         score += 3;  // 非常接近下轨
+            else if (bollPct < 30)         score += 2;
+            else if (bollPct > 85)         score -= 2;  // 接近上轨，不宜追
+            if      (chgPct < -5)          score += 2;
+            else if (chgPct < -2)          score += 1;
+            else if (chgPct > 5)           score -= 2;
+            else if (chgPct > 3)           score -= 1;
           } else {
-            // 趋势模式：寻找上涨动能延续机会
-            if (rsi > 50 && rsi <= 70) score += 2;   // 健康上涨区间
-            else if (rsi > 70 && rsi <= 80) score += 1; // 强势但未极端超买
-            else if (rsi > 80) score -= 2;            // 极端超买，随时回调
-            else if (rsi < 45) score -= 2;            // 趋势未起
-            if (maDiff > 0.5 && maDiff < 5) score += 2;  // 价格站上均线、趋势确立
-            else if (maDiff >= 5 && maDiff < 10) score += 1; // 偏高但趋势强
-            else if (maDiff >= 10) score -= 2;        // 偏离过大，过热
-            else if (maDiff < 0) score -= 1;          // 价格在均线下，趋势未起
-            if (chgPct > 5) score += 2;               // 强劲上涨动能
-            else if (chgPct > 2) score += 1;          // 温和上涨
-            else if (chgPct < -3) score -= 2;         // 跌破趋势
-            else if (chgPct < 0) score -= 1;          // 小跌，趋势偏弱
+            if      (rsi1h > 50 && rsi4h > 50 && rsi1h <= 70) score += 3; // 双周期确认上涨
+            else if (rsi1h > 50 && rsi1h <= 70) score += 2;
+            else if (rsi1h > 70 && rsi1h <= 80) score += 1;
+            else if (rsi1h > 80)           score -= 2;
+            else if (rsi1h < 45)           score -= 2;
+            // 布林带趋势确认
+            if      (bollPct > 50 && bollPct < 80)  score += 2; // 站上中轨，趋势确立
+            else if (bollPct >= 80 && bollPct < 90)  score += 1; // 强势但接近上轨
+            else if (bollPct >= 90)                  score -= 1; // 可能过热
+            else if (bollPct < 40)                   score -= 1; // 还在中下方
+            if      (maDiff > 0.5 && maDiff < 5)    score += 2;
+            else if (maDiff >= 5 && maDiff < 10)    score += 1;
+            else if (maDiff >= 10)                   score -= 2;
+            else if (maDiff < 0)                     score -= 1;
+            if      (chgPct > 5)   score += 2;
+            else if (chgPct > 2)   score += 1;
+            else if (chgPct < -3)  score -= 2;
+            else if (chgPct < 0)   score -= 1;
           }
 
-          let rsiText, maText, chgText;
-          if (effectiveMode === 'dip') {
-            rsiText = rsi < 35 ? "处于超卖区（历史上这个位置反弹概率较高）"
-                    : rsi < 50 ? "未过热，情绪偏冷"
-                    : rsi < 65 ? "正常范围，没有明显信号"
-                    : "处于超买区（短期涨太多，追高风险大）";
-            maText  = maDiff < -1 ? "价格低于20小时均线，属于阶段低位"
-                    : maDiff < 1.5 ? "价格在均线附近，位置中性"
-                    : "价格高于均线较多，追高需谨慎";
-            chgText = chgPct < -3 ? "今日大跌，可能是低吸机会"
-                    : chgPct < 0 ? "今日小幅下跌"
-                    : chgPct < 3 ? "今日小幅上涨"
-                    : "今日涨幅较大，追高风险增加";
-          } else {
-            rsiText = rsi > 80 ? "RSI 极端超买，注意短期回调风险"
-                    : rsi > 60 ? "RSI 进入强势区，趋势健康"
-                    : rsi > 50 ? "RSI 刚过中线，趋势初步确立"
-                    : "RSI 低于50，上涨动能不足";
-            maText  = maDiff > 5 ? "价格大幅站上均线，趋势强劲"
-                    : maDiff > 0 ? "价格站上20小时均线，趋势向上"
-                    : "价格在均线下方，趋势尚未确立";
-            chgText = chgPct > 5 ? "今日大涨，动能强"
-                    : chgPct > 2 ? "今日温和上涨，趋势延续"
-                    : chgPct >= 0 ? "今日几乎持平，观察方向"
-                    : "今日下跌，上涨动能减弱";
+          // 成交量修正（放量信号更可信，缩量减半）
+          const isGreenCandle = price >= parseFloat(klines1h[klines1h.length - 1][1]);
+          if (volRatio > 1.5) {
+            if (score > 0 &&  isGreenCandle) score += 1; // 放量上涨，加强做多信号
+            if (score > 0 && !isGreenCandle) score -= 1; // 放量下跌，减弱做多信号
+          } else if (volRatio < 0.6) {
+            score = Math.round(score * 0.7); // 缩量，信号可信度降低
           }
+
+          // ── 生成信号文字 ──
+          const rsiBothNote = rsiBothOversold  ? "⚡ 1h+4h 双周期同时超卖，信号强度高。" :
+                              rsiBothOverbought ? "⚠️ 1h+4h 双周期同时超买，谨慎追高。" :
+                              rsiAgree ? "1h 与 4h RSI 方向一致，信号可信度提升。" :
+                              "1h 与 4h RSI 方向不一致，信号偏弱。";
+          const bollNote = boll ? (bollPct < 25 ? "价格接近布林带下轨，历史上属于低估区。"
+                                 : bollPct > 75 ? "价格接近布林带上轨，注意高位风险。"
+                                 : "价格在布林带中间区间。") : "";
+          const volNote = volRatio > 1.5 ? (isGreenCandle ? "放量上涨，买力强。" : "放量下跌，卖压重。")
+                        : volRatio < 0.7 ? "缩量，主力观望，信号可信度偏低。"
+                        : "成交量正常。";
 
           const dipLabels = [
-            [4,  "🟢", "现在是相对好的买入时机",  "多个指标显示价格偏低，可以考虑买入",      "sig-buy"],
-            [2,  "🟡", "可以小仓位试探",          "指标偏向有利，但信号不算强，先买一部分",   "sig-buy"],
-            [0,  "🟡", "观望，信号不明",           "当前没有明显的低位信号，等等看",           "sig-wait"],
-            [-2, "🔴", "暂时不建议买入",           "价格偏高或刚涨过一波，等回调再进",         "sig-no"],
-            [-99,"🔴", "不建议现在买",             "多个指标显示价格过热，追高亏钱概率大",     "sig-no"],
+            [5,  "🟢", "强烈买入信号",      "多周期超卖 + 布林带低位 + 量能确认，可信度高",    "sig-buy"],
+            [3,  "🟢", "买入信号",          "多个指标显示低位，可以考虑买入",                   "sig-buy"],
+            [1,  "🟡", "可小仓位试探",      "有低位信号但不强，先买一部分",                     "sig-buy"],
+            [-1, "🟡", "观望，信号不明",    "当前没有明显低位信号，等等看",                     "sig-wait"],
+            [-3, "🔴", "暂不建议买",        "价格偏高或刚涨过一波，等回调",                     "sig-no"],
+            [-99,"🔴", "不建议买入",        "多指标显示过热，追高风险大",                       "sig-no"],
           ];
           const trendLabels = [
-            [4,  "🚀", "趋势强劲，可以顺势买入",   "上涨动能充足，价格站上均线，可跟随趋势",   "sig-buy"],
-            [2,  "📈", "趋势向上，可小仓位跟进",   "多个指标显示上涨趋势延续，建议轻仓跟随",   "sig-buy"],
-            [0,  "🟡", "趋势不明，暂时观望",       "动能不足，等待趋势方向更清晰",             "sig-wait"],
-            [-2, "⚠️", "趋势走弱，不宜追涨",       "上涨动能减弱，此时入场容易被套",           "sig-no"],
-            [-99,"🔴", "趋势反转风险，不建议买入", "多个指标显示趋势可能已见顶",               "sig-no"],
+            [5,  "🚀", "强趋势，可顺势买入", "双周期确认 + 布林带上方 + 放量，趋势可信度高",    "sig-buy"],
+            [3,  "📈", "趋势向上，可跟进",   "多个指标显示上涨趋势，可轻仓跟随",                "sig-buy"],
+            [1,  "🟡", "弱趋势，谨慎试探",   "有上涨信号但强度不足",                            "sig-buy"],
+            [-1, "🟡", "趋势不明，观望",     "动能不足，等方向更清晰",                          "sig-wait"],
+            [-3, "⚠️", "趋势走弱，不宜追涨", "上涨动能减弱，此时入场容易被套",                  "sig-no"],
+            [-99,"🔴", "趋势反转风险",       "多指标显示趋势可能见顶",                          "sig-no"],
           ];
           const labels = effectiveMode === 'dip' ? dipLabels : trendLabels;
           const lv = labels.find(l => score >= l[0]);
@@ -1017,11 +1113,10 @@
           signalSub.textContent   = lv[3];
 
           const modeNote = isTrending
-            ? "当前处于上涨趋势（RSI偶正、价格站上均线、MACD多头），给出趋势信号。"
-            : "当前处于震荡/回调阶段，给出低吸信号。";
-          signalNote.textContent =
-            modeNote + " RSI：" + rsiText + "。均线：" + maText + "。涨跌：" + chgText +
-            "。（数据来自 Binance 1小时K线，仅供参考，不构成投资建议）";
+            ? "【趋势模式】RSI 双周期偶正 + 价格站上均线 + MACD 多头。"
+            : "【回调模式】当前无明显上涨趋势，寻找低位机会。";
+          signalNote.textContent = modeNote + " " + rsiBothNote + " " + bollNote + " " + volNote +
+            "（数据：Binance 1h+4h K线，仅供参考，不构成投资建议）";
         } catch (e) {
           signalTitle.textContent = "获取数据失败";
           signalSub.textContent   = "请检查网络连接后点击刷新";
