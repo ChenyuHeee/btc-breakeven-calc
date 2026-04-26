@@ -703,7 +703,7 @@
       }
 
       // 弹出确认对话框并在用户确认后下单
-      function showOrderModal({ title, rows, confirmClass, execBtn, onConfirm }) {
+      function showOrderModal({ title, rows, confirmClass, execBtn, ocoParams, onConfirm }) {
         omTitle.textContent = title;
         omBody.innerHTML = rows.map(([k, v]) =>
           `<div class="order-modal-row"><span>${k}</span><span>${v}</span></div>`
@@ -723,9 +723,36 @@
             const avg    = result.fills && result.fills.length
               ? (result.fills.reduce((s, f) => s + parseFloat(f.price) * parseFloat(f.qty), 0) /
                  result.fills.reduce((s, f) => s + parseFloat(f.qty), 0)).toFixed(1) : "";
-            omBody.innerHTML = `<div style="text-align:center;padding:10px 0;font-size:0.95rem;color:var(--green)">✅ 下单成功！</div>`
+            omBody.innerHTML = `<div style="text-align:center;padding:10px 0;font-size:0.95rem;color:var(--green)">✅ 买入成功！</div>`
               + `<div class="order-modal-row"><span>成交数量</span><span>${filled} BTC</span></div>`
               + (avg ? `<div class="order-modal-row"><span>均价</span><span>$${parseFloat(avg).toLocaleString()}</span></div>` : "");
+
+            // 自动挂 OCO 止盈止损单
+            if (ocoParams && filled && parseFloat(filled) > 0.000001) {
+              omBody.innerHTML += `<div style="font-size:0.8rem;color:var(--muted);margin-top:8px">⏳ 正在挂 OCO 止盈止损单...</div>`;
+              try {
+                const qty        = parseFloat(filled);
+                // Binance 最小下单单位 0.00001 BTC，且价格必须符合最小名义 5 USDT
+                const safeQty   = Math.floor(qty * 100000) / 100000;  // floor 至 5 位小数
+                const tpPrice   = Math.round(ocoParams.targetPrice);  // 止盈限价
+                const slTrigger = Math.round(ocoParams.stopPrice * 1.005); // 触发价略高于止损限价
+                const slLimit   = Math.round(ocoParams.stopPrice);    // 止损限价
+                const ocoResult = await binanceSignedPost("/api/v3/orderList/oco", {
+                  symbol: "BTCUSDT",
+                  side: "SELL",
+                  quantity: safeQty,
+                  price: tpPrice,                  // 止盈限价单
+                  stopPrice: slTrigger,            // 止损触发价
+                  stopLimitPrice: slLimit,         // 止损限价
+                  stopLimitTimeInForce: "GTC"
+                });
+                omBody.innerHTML += `<div style="font-size:0.8rem;color:var(--green);margin-top:4px">✅ OCO 挂单成功！止盈 $${tpPrice.toLocaleString()} · 止损 $${slLimit.toLocaleString()}</div>
+                  <div style="font-size:0.72rem;color:var(--muted)">OrderListId: ${ocoResult.orderListId}，关闭页面后订单仍有效</div>`;
+              } catch(ocoErr) {
+                omBody.innerHTML += `<div style="font-size:0.78rem;color:var(--red);margin-top:4px">⚠️ OCO 挂单失败：${ocoErr.message}</div>
+                  <div style="font-size:0.72rem;color:var(--muted)">请到 Binance 手动设置止盈止损单</div>`;
+              }
+            }
             omConfirm.textContent = "关闭";
             omConfirm.disabled = false;
             omConfirm.onclick = doClose;
@@ -1388,11 +1415,12 @@
                   ["交易对", "BTC / USDT 现货"],
                   ["方向", "市价买入"],
                   ["花费金额", buyUsdt.toLocaleString() + " USDT"],
-                  ["目标价", "$" + Math.round(targetPrice).toLocaleString()],
-                  ["止损参考", "$" + Math.round(stopPrice).toLocaleString()]
+                  ["止盈目标", "$" + Math.round(targetPrice).toLocaleString()],
+                  ["止损限价", "$" + Math.round(stopPrice).toLocaleString()]
                 ],
                 confirmClass: "buy-btn",
                 execBtn: execBuyBtn,
+                ocoParams: { targetPrice, stopPrice },
                 onConfirm: () => binanceSignedPost("/api/v3/order", {
                   symbol: "BTCUSDT", side: "BUY", type: "MARKET",
                   quoteOrderQty: buyUsdt
