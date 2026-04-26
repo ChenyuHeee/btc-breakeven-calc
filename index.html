@@ -1122,6 +1122,8 @@
         } catch (e) {
           signalTitle.textContent = "获取数据失败";
           signalSub.textContent   = "请检查网络连接后点击刷新";
+          signalNote.textContent  = "错误详情：" + e.message;
+          console.error("[fetchSignal]", e);
         }
       }
 
