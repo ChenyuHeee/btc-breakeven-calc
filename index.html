@@ -196,7 +196,15 @@
       .tp-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
       .tp-val { font-size: 0.95rem; font-weight: 700; }
       .tp-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
-      .tp-no-signal { font-size: 0.82rem; color: var(--muted); text-align: center; padding: 8px 0; }
+      /* 卖出建议面板 */
+      .sell-plan { margin-top: 10px; border-top: 2px solid var(--red); padding-top: 10px; display: none; }
+      .sell-plan-title { font-size: 0.72rem; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+      .sell-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+      .sp-box { background: var(--red-bg); border: 1px solid var(--red); border-radius: 9px; padding: 8px 10px; }
+      .sp-box.neutral { background: var(--bg); border-color: var(--border); }
+      .sp-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
+      .sp-val { font-size: 0.95rem; font-weight: 700; color: var(--red); }
+      .sp-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
       #signalCard.sig-buy  { background: var(--green-bg); }
       #signalCard.sig-no   { background: var(--red-bg); }
       #signalCard.sig-wait { background: #fdfaf6; }
@@ -367,7 +375,7 @@
         </div>
         <div class="signal-note" id="signalNote"></div>
         <div class="trade-plan" id="tradePlan">
-          <div class="trade-plan-title">📋 交易建议</div>
+          <div class="trade-plan-title">📋 买入建议</div>
           <div class="trade-plan-grid">
             <div class="tp-box">
               <div class="tp-label">建议仓位</div>
@@ -388,6 +396,31 @@
               <div class="tp-label">止损参考价</div>
               <div class="tp-val" id="tpStop">--</div>
               <div class="tp-sub" id="tpStopSub"></div>
+            </div>
+          </div>
+        </div>
+        <div class="sell-plan" id="sellPlan">
+          <div class="sell-plan-title">🚨 卖出建议</div>
+          <div class="sell-plan-grid">
+            <div class="sp-box">
+              <div class="sp-label">建议操作</div>
+              <div class="sp-val" id="spAction">--</div>
+              <div class="sp-sub" id="spActionSub"></div>
+            </div>
+            <div class="sp-box">
+              <div class="sp-label">卖出比例</div>
+              <div class="sp-val" id="spRatio">--</div>
+              <div class="sp-sub" id="spRatioSub"></div>
+            </div>
+            <div class="sp-box neutral">
+              <div class="sp-label">当前价格</div>
+              <div class="sp-val" id="spPrice" style="color:var(--text)">--</div>
+              <div class="sp-sub" id="spPriceSub"></div>
+            </div>
+            <div class="sp-box neutral">
+              <div class="sp-label">主要原因</div>
+              <div class="sp-val" id="spReason" style="color:var(--red);font-size:0.82rem">--</div>
+              <div class="sp-sub" id="spReasonSub"></div>
             </div>
           </div>
         </div>
@@ -753,6 +786,15 @@
       const tpTargetSub   = document.getElementById("tpTargetSub");
       const tpStop        = document.getElementById("tpStop");
       const tpStopSub     = document.getElementById("tpStopSub");
+      const sellPlan      = document.getElementById("sellPlan");
+      const spAction      = document.getElementById("spAction");
+      const spActionSub   = document.getElementById("spActionSub");
+      const spRatio       = document.getElementById("spRatio");
+      const spRatioSub    = document.getElementById("spRatioSub");
+      const spPrice       = document.getElementById("spPrice");
+      const spPriceSub    = document.getElementById("spPriceSub");
+      const spReason      = document.getElementById("spReason");
+      const spReasonSub   = document.getElementById("spReasonSub");
       const indRsiVal     = document.getElementById("indRsiVal");
       const indRsiBar     = document.getElementById("indRsiBar");
       const indRsi4hVal   = document.getElementById("indRsi4hVal");
@@ -1123,6 +1165,60 @@
             tpStopSub.textContent = "-" + effectiveStopPct + "% 止损";
           } else {
             tradePlan.style.display = "none";
+          }
+
+          // ── 卖出信号评分 ──
+          // 独立于买入评分，专门衡量超买过热时卖出语义
+          let sellScore = 0;
+          const sellReasons = [];
+
+          // RSI 超买
+          if      (rsi1h > 80)        { sellScore += 4; sellReasons.push("RSI 1h " + rsi1h.toFixed(0) + " 极度超买"); }
+          else if (rsi1h > 70)        { sellScore += 3; sellReasons.push("RSI 1h " + rsi1h.toFixed(0) + " 超买"); }
+          else if (rsi1h > 65)        { sellScore += 1; sellReasons.push("RSI 1h 偏高"); }
+          if (rsi4h != null) {
+            if      (rsi4h > 75)      { sellScore += 3; sellReasons.push("RSI 4h " + rsi4h.toFixed(0) + " 超买"); }
+            else if (rsi4h > 65)      { sellScore += 2; sellReasons.push("RSI 4h 偏高"); }
+          }
+
+          // 布林带过热
+          if      (bollPct > 95)      { sellScore += 4; sellReasons.push("突破布林上轨"); }
+          else if (bollPct > 85)      { sellScore += 2; sellReasons.push("布林带上轨区"); }
+          else if (bollPct > 75)      { sellScore += 1; sellReasons.push("布林带偏高"); }
+
+          // MACD 死叉 or 空头加速
+          if (macd) {
+            if (macd.prevHist > 0 && macd.histogram < 0) { sellScore += 4; sellReasons.push("MACD 死叉"); }
+            else if (!macdBull && macd.histogram < macd.prevHist) { sellScore += 2; sellReasons.push("MACD 空头加速"); }
+            else if (!macdBull)                                    { sellScore += 1; }
+          }
+
+          // 24h 涨幅过大（短期过热）
+          if      (chgPct > 15)       { sellScore += 3; sellReasons.push("24h 涨超 15%，短线过热"); }
+          else if (chgPct > 8)        { sellScore += 2; sellReasons.push("24h 大涨 " + chgPct.toFixed(1) + "%"); }
+          else if (chgPct > 5)        { sellScore += 1; }
+
+          // EMA 死叉
+          if (!emaCrossUp && ema9 && ema21) { sellScore += 2; sellReasons.push("EMA 死叉"); }
+
+          const hasBtc = liveBtcBalance !== null && liveBtcBalance > 0.00001;
+
+          if (sellScore >= 4) {
+            sellPlan.style.display = "block";
+            const isUrgent = sellScore >= 7;
+            spAction.textContent    = isUrgent ? "⚡ 立即减仓" : "⚠️ 建议减仓";
+            spActionSub.textContent = isUrgent ? "多指标同时超买，过热风险高" : "信号偏强，逢高分批出";
+            const sellRatioPct      = sellScore >= 8 ? 100 : sellScore >= 6 ? 50 : 30;
+            spRatio.textContent     = sellRatioPct + "%";
+            spRatioSub.textContent  = hasBtc
+              ? ("≈ " + (liveBtcBalance * sellRatioPct / 100).toFixed(5) + " BTC")
+              : (sellRatioPct === 100 ? "全仓" : "持仓的 " + sellRatioPct + "%");
+            spPrice.textContent     = "$" + Math.round(price).toLocaleString();
+            spPriceSub.textContent  = "当前价，可挂稍高限价单";
+            spReason.textContent    = sellReasons.slice(0, 2).join(" · ");
+            spReasonSub.textContent = sellReasons.length > 2 ? "+ " + sellReasons.slice(2).join(" · ") : "";
+          } else {
+            sellPlan.style.display = "none";
           }
         } catch (e) {
           signalTitle.textContent = "获取数据失败";
