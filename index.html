@@ -202,6 +202,16 @@
       .tp-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
       /* 卖出建议面板 */
       .sell-plan { margin-top: 10px; border-top: 2px solid var(--red); padding-top: 10px; display: none; }
+      /* 持仓监控面板 */
+      .holding-monitor { margin-top: 10px; border-top: 1.5px solid var(--border); padding-top: 10px; display: none; }
+      .holding-monitor-title { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+      .holding-monitor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
+      .hm-box { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
+      .hm-box.hm-green { background: var(--green-bg); border-color: var(--green); }
+      .hm-box.hm-red   { background: var(--red-bg);   border-color: var(--red); }
+      .hm-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
+      .hm-val   { font-size: 0.95rem; font-weight: 700; }
+      .hm-sub   { font-size: 0.7rem;  color: var(--muted); margin-top: 2px; }
       .sell-plan-title { font-size: 0.72rem; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
       .sell-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
       .sp-box { background: var(--red-bg); border: 1px solid var(--red); border-radius: 9px; padding: 8px 10px; }
@@ -447,6 +457,33 @@
             </div>
           </div>
           <button class="trade-exec-btn exec-disabled" id="execBuyBtn">🔒 一键买入（需先同步账户）</button>
+        </div>
+        <!-- 持仓监控：持有 BTC 时常驻显示 -->
+        <div class="holding-monitor" id="holdingMonitor" style="display:none">
+          <div class="holding-monitor-title">📊 持仓监控</div>
+          <div class="holding-monitor-grid">
+            <div class="hm-box">
+              <div class="hm-label">持仓 BTC</div>
+              <div class="hm-val" id="hmBtc">--</div>
+              <div class="hm-sub" id="hmBtcSub"></div>
+            </div>
+            <div class="hm-box">
+              <div class="hm-label">浮动盈亏</div>
+              <div class="hm-val" id="hmPnl">--</div>
+              <div class="hm-sub" id="hmPnlSub"></div>
+            </div>
+            <div class="hm-box hm-green">
+              <div class="hm-label">止盈参考价</div>
+              <div class="hm-val" id="hmTarget" style="color:var(--green)">--</div>
+              <div class="hm-sub" id="hmTargetSub"></div>
+            </div>
+            <div class="hm-box hm-red">
+              <div class="hm-label">止损参考价</div>
+              <div class="hm-val" id="hmStop" style="color:var(--red)">--</div>
+              <div class="hm-sub" id="hmStopSub"></div>
+            </div>
+          </div>
+          <button class="trade-exec-btn exec-sell" id="execHoldSellBtn" style="display:none">⚡ 全部卖出 BTC</button>
         </div>
         <div class="sell-plan" id="sellPlan">
           <div class="sell-plan-title">🚨 卖出建议</div>
@@ -782,7 +819,8 @@
           if (chUsdtEl) chUsdtEl.textContent = fmt(liveUsdtBalance) + " U";
 
           // Recent trades
-          const trades = await binanceSigned("/api/v3/myTrades", { symbol: "BTCUSDT", limit: 10 });
+          const trades = await binanceSigned("/api/v3/myTrades", { symbol: "BTCUSDT", limit: 50 });
+          window._lastTrades = trades; // 供持仓监控面板计算均价使用
           chTradesEl.innerHTML = "";
           if (trades.length > 0) {
             trades.slice().reverse().forEach(t => {
@@ -943,6 +981,16 @@
       const tpStopSub     = document.getElementById("tpStopSub");
       const execBuyBtn    = document.getElementById("execBuyBtn");
       const execSellBtn   = document.getElementById("execSellBtn");
+      const holdingMonitor  = document.getElementById("holdingMonitor");
+      const hmBtc           = document.getElementById("hmBtc");
+      const hmBtcSub        = document.getElementById("hmBtcSub");
+      const hmPnl           = document.getElementById("hmPnl");
+      const hmPnlSub        = document.getElementById("hmPnlSub");
+      const hmTarget        = document.getElementById("hmTarget");
+      const hmTargetSub     = document.getElementById("hmTargetSub");
+      const hmStop          = document.getElementById("hmStop");
+      const hmStopSub       = document.getElementById("hmStopSub");
+      const execHoldSellBtn = document.getElementById("execHoldSellBtn");
       const orderModal    = document.getElementById("orderModal");
       const omTitle       = document.getElementById("omTitle");
       const omBody        = document.getElementById("omBody");
@@ -1397,6 +1445,72 @@
           if (!emaCrossUp && ema9 && ema21) { sellScore += 2; sellReasons.push("EMA 死叉"); }
 
           const hasBtc = liveBtcBalance !== null && liveBtcBalance > 0.00001;
+
+          // ── 持仓监控面板 ──
+          if (hasBtc) {
+            holdingMonitor.style.display = "block";
+            const btcNow = liveBtcBalance * price;
+            hmBtc.textContent    = liveBtcBalance.toFixed(6) + " BTC";
+            hmBtcSub.textContent = "≈ $" + Math.round(btcNow).toLocaleString();
+
+            // 平均成本：从recent trades 取，如果取不到就显示 当前价
+            const recentTrades = window._lastTrades || [];
+            let avgCost = null;
+            if (recentTrades.length > 0) {
+              // 取最近一批买入记录展示浮盈
+              const buyTrades = recentTrades.filter(t => t.isBuyer);
+              if (buyTrades.length > 0) {
+                const totalQty  = buyTrades.reduce((s, t) => s + parseFloat(t.qty), 0);
+                const totalCost = buyTrades.reduce((s, t) => s + parseFloat(t.qty) * parseFloat(t.price), 0);
+                avgCost = totalCost / totalQty;
+              }
+            }
+            if (avgCost && avgCost > 0) {
+              const pnlPct = (price / avgCost - 1) * 100;
+              const pnlUsdt = (price - avgCost) * liveBtcBalance;
+              hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
+              hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
+              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT (均价 $" + Math.round(avgCost).toLocaleString() + ")";
+            } else {
+              hmPnl.textContent    = "--";
+              hmPnl.style.color    = "var(--text)";
+              hmPnlSub.textContent = "同步买入记录可显示盈亏";
+            }
+
+            // 止盈/止损参考价：基于布林带 + RSI + 设置的止损比例
+            const tgtPct = boll ? Math.max(4, Math.min(20, (boll.upper - price) / price * 100)) : 8;
+            const stpPct = chStopPct || 15;
+            hmTarget.textContent    = "$" + Math.round(price * (1 + tgtPct / 100)).toLocaleString();
+            hmTargetSub.textContent = "+" + tgtPct.toFixed(1) + "% （布林上轨）";
+            hmStop.textContent      = "$" + Math.round(price * (1 - stpPct / 100)).toLocaleString();
+            hmStopSub.textContent   = "-" + stpPct + "% 止损";
+
+            // 一键全部卖出按钮
+            if (hasApiKey) {
+              const allQty = +liveBtcBalance.toFixed(6);
+              execHoldSellBtn.style.display = "block";
+              execHoldSellBtn.textContent   = "⚡ 全部卖出 " + allQty + " BTC";
+              execHoldSellBtn.onclick = () => showOrderModal({
+                title: "确认全部卖出",
+                rows: [
+                  ["交易对", "BTC / USDT 现货"],
+                  ["方向", "市价卖出"],
+                  ["卖出数量", allQty + " BTC (全部)"],
+                  ["当前参考价", "$" + Math.round(price).toLocaleString()]
+                ],
+                confirmClass: "sell-btn",
+                execBtn: execHoldSellBtn,
+                onConfirm: () => binanceSignedPost("/api/v3/order", {
+                  symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                  quantity: allQty
+                })
+              });
+            } else {
+              execHoldSellBtn.style.display = "none";
+            }
+          } else {
+            holdingMonitor.style.display = "none";
+          }
 
           if (sellScore >= 4) {
             sellPlan.style.display = "block";
