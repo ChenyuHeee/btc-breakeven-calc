@@ -848,8 +848,8 @@
         return 100 - 100 / (1 + rs);
       }
 
-      // ── EMA 计算 ──
-      function calcEMA(values, period) {
+      // ── EMA 计算（返回数组，供 MACD 使用）──
+      function calcEMAArr(values, period) {
         if (values.length < period) return [];
         const k = 2 / (period + 1);
         let ema = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
@@ -861,11 +861,11 @@
       // ── MACD(12,26,9) ──
       function calcMACD(closes) {
         if (closes.length < 34) return null;
-        const e12 = calcEMA(closes, 12), e26 = calcEMA(closes, 26);
+        const e12 = calcEMAArr(closes, 12), e26 = calcEMAArr(closes, 26);
         const off = (closes.length - e26.length) - (closes.length - e12.length);
         const ml = [];
         for (let i = 0; i < e26.length; i++) ml.push(e12[i + off] - e26[i]);
-        const sig = calcEMA(ml, 9);
+        const sig = calcEMAArr(ml, 9);
         const h  = ml[ml.length-1] - sig[sig.length-1];
         const ph = ml[ml.length-2] - sig[sig.length-2];
         return { histogram: h, prevHist: ph };
