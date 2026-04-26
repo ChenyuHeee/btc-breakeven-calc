@@ -733,11 +733,15 @@
               omBody.innerHTML += `<div style="font-size:0.8rem;color:var(--muted);margin-top:8px">⏳ 正在挂 OCO 止盈止损单...</div>`;
               try {
                 const qty        = parseFloat(filled);
-                // Binance 最小下单单位 0.00001 BTC，且价格必须符合最小名义 5 USDT
+                // Binance 最小下单单位 0.00001 BTC，且名义价值 >= 5 USDT
                 const safeQty   = Math.floor(qty * 100000) / 100000;  // floor 至 5 位小数
                 const tpPrice   = Math.round(ocoParams.targetPrice);  // 止盈限价
                 const slTrigger = Math.round(ocoParams.stopPrice * 1.005); // 触发价略高于止损限价
                 const slLimit   = Math.round(ocoParams.stopPrice);    // 止损限价
+                // 检查名义价值（用止损价估算最小值）
+                if (safeQty < 0.00001 || safeQty * slLimit < 5) {
+                  throw new Error("持仓量过小（名义价值 < 5 USDT），无法挂 OCO 单，请到 Binance 手动设置");
+                }
                 const ocoResult = await binanceSignedPost("/api/v3/orderList/oco", {
                   symbol: "BTCUSDT",
                   side: "SELL",
