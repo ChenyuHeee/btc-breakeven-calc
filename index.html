@@ -903,10 +903,12 @@
         signalCardEl.className  = "signal-card";
         try {
           // 同时拿 1h (100根) + 4h (60根) + 24h ticker
+          const sigProxy = (LS.get("proxy") || "").trim().replace(/\/$/, "");
+          const sigBase  = sigProxy || BINANCE_API;
           const [kl1hRes, kl4hRes, tkRes] = await Promise.all([
-            fetch(BINANCE_API + "/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
-            fetch(BINANCE_API + "/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=60"),
-            fetch(BINANCE_API + "/api/v3/ticker/24hr?symbol=BTCUSDT")
+            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
+            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=60"),
+            fetch(sigBase + "/api/v3/ticker/24hr?symbol=BTCUSDT")
           ]);
           const klines1h = await kl1hRes.json();
           const klines4h = await kl4hRes.json();
