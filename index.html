@@ -79,12 +79,12 @@
       }
       .col-header {
         display: flex; align-items: center; justify-content: space-between;
-        padding: 10px 14px; border-bottom: 1.5px solid var(--border); flex-shrink: 0;
+        padding: 7px 12px; border-bottom: 1.5px solid var(--border); flex-shrink: 0;
       }
       .col-title { font-weight: 700; font-size: 0.95rem; }
       .col-body {
-        flex: 1; overflow-y: auto; padding: 12px 14px;
-        display: flex; flex-direction: column; gap: 10px; min-height: 0;
+        flex: 1; overflow-y: auto; padding: 8px 12px;
+        display: flex; flex-direction: column; gap: 6px; min-height: 0;
       }
 
       /* Challenge column */
@@ -95,31 +95,31 @@
         font-family: inherit; transition: background .15s;
       }
       .ch-btn:hover { background: var(--border); }
-      .ch-big-num { font-size: 2.2rem; font-weight: 800; color: var(--accent); line-height: 1.1; transition: color .3s; }
+      .ch-big-num { font-size: 1.8rem; font-weight: 800; color: var(--accent); line-height: 1.1; transition: color .3s; }
       .ch-big-num.done { color: var(--green); }
       .ch-target { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
       .ch-sub { font-size: 0.8rem; color: var(--muted); }
       .ch-bar-wrap { height: 7px; background: #e8e0d4; border-radius: 4px; overflow: hidden; }
       .ch-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width .4s; }
       .ch-bar.done { background: var(--green); }
-      .ch-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-      .ch-box { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
-      .ch-box-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 3px; }
-      .ch-holding { margin-top: 7px; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 12px; display: flex; flex-direction: column; gap: 5px; }
-      .ch-holding-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; }
+      .ch-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+      .ch-box { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 5px 8px; }
+      .ch-box-label { font-size: 0.65rem; color: var(--muted); margin-bottom: 2px; }
+      .ch-holding { margin-top: 5px; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 5px 10px; display: flex; flex-direction: column; gap: 3px; }
+      .ch-holding-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; }
       .ch-holding-label { color: var(--muted); }
       .ch-holding-val { font-weight: 700; }
-      .ch-box-val { font-size: 0.9rem; font-weight: 700; }
+      .ch-box-val { font-size: 0.85rem; font-weight: 700; }
       .ch-sync-err-msg {
         background: var(--red-bg); border: 1.5px solid var(--red);
         border-radius: 9px; padding: 8px 10px;
         font-size: 0.78rem; color: var(--red); white-space: pre-wrap; word-break: break-all;
       }
-      .ch-trades-title { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
-      .ch-trades { display: flex; flex-direction: column; gap: 5px; }
+      .ch-trades-title { font-size: 0.72rem; color: var(--muted); margin-bottom: 3px; }
+      .ch-trades { display: flex; flex-direction: column; gap: 3px; }
       .ch-trade-row {
         display: flex; justify-content: space-between; align-items: center;
-        font-size: 0.78rem; padding: 5px 8px; background: var(--bg); border-radius: 7px;
+        font-size: 0.72rem; padding: 3px 7px; background: var(--bg); border-radius: 6px;
       }
       .ch-trade-side { font-weight: 700; }
       .ch-trade-side.buy { color: var(--green); }
@@ -181,49 +181,49 @@
         font-family: inherit; transition: background .15s;
       }
       .signal-refresh:hover { background: var(--border); }
-      .signal-header { display: flex; align-items: center; gap: 10px; }
-      .signal-emoji { font-size: 2rem; line-height: 1; }
-      .signal-title { font-size: 1rem; font-weight: 700; }
-      .signal-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
-      .indicators { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-      .ind-box { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
-      .ind-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 3px; }
-      .ind-value { font-size: 0.88rem; font-weight: 700; margin-bottom: 4px; }
-      .ind-bar-wrap { height: 5px; background: #e8e0d4; border-radius: 3px; overflow: hidden; }
+      .signal-header { display: flex; align-items: center; gap: 8px; }
+      .signal-emoji { font-size: 1.5rem; line-height: 1; }
+      .signal-title { font-size: 0.92rem; font-weight: 700; }
+      .signal-sub { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
+      .indicators { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+      .ind-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; }
+      .ind-label { font-size: 0.63rem; color: var(--muted); margin-bottom: 2px; }
+      .ind-value { font-size: 0.82rem; font-weight: 700; margin-bottom: 3px; }
+      .ind-bar-wrap { height: 4px; background: #e8e0d4; border-radius: 3px; overflow: hidden; }
       .ind-bar { height: 100%; border-radius: 3px; transition: width .4s; }
-      .signal-note { font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
+      .signal-note { font-size: 0.7rem; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
       /* 交易建议 */
-      .trade-plan { margin-top: 10px; border-top: 1.5px solid var(--border); padding-top: 10px; display: none; }
-      .trade-plan-title { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
-      .trade-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-      .tp-box { background: var(--bg); border-radius: 9px; padding: 8px 10px; }
-      .tp-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
-      .tp-val { font-size: 0.95rem; font-weight: 700; }
-      .tp-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+      .trade-plan { margin-top: 0; border-top: 1.5px solid var(--border); padding-top: 7px; display: none; }
+      .trade-plan-title { font-size: 0.66rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
+      .trade-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+      .tp-box { background: var(--bg); border-radius: 8px; padding: 5px 8px; }
+      .tp-label { font-size: 0.62rem; color: var(--muted); margin-bottom: 2px; }
+      .tp-val { font-size: 0.85rem; font-weight: 700; }
+      .tp-sub { font-size: 0.63rem; color: var(--muted); margin-top: 1px; }
       /* 卖出建议面板 */
-      .sell-plan { margin-top: 10px; border-top: 2px solid var(--red); padding-top: 10px; display: none; }
+      .sell-plan { margin-top: 0; border-top: 2px solid var(--red); padding-top: 7px; display: none; }
       /* 持仓监控面板 */
-      .holding-monitor { margin-bottom: 10px; border-bottom: 1.5px solid var(--border); padding-bottom: 10px; display: none; }
-      .holding-monitor-title { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
-      .holding-monitor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
-      .hm-box { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
+      .holding-monitor { margin-bottom: 7px; border-bottom: 1.5px solid var(--border); padding-bottom: 7px; display: none; }
+      .holding-monitor-title { font-size: 0.66rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
+      .holding-monitor-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 5px; margin-bottom: 6px; }
+      .hm-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; }
       .hm-box.hm-green { background: var(--green-bg); border-color: var(--green); }
       .hm-box.hm-red   { background: var(--red-bg);   border-color: var(--red); }
-      .hm-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
-      .hm-val   { font-size: 0.95rem; font-weight: 700; }
-      .hm-sub   { font-size: 0.7rem;  color: var(--muted); margin-top: 2px; }
-      .sell-plan-title { font-size: 0.72rem; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
-      .sell-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-      .sp-box { background: var(--red-bg); border: 1px solid var(--red); border-radius: 9px; padding: 8px 10px; }
+      .hm-label { font-size: 0.62rem; color: var(--muted); margin-bottom: 2px; }
+      .hm-val   { font-size: 0.85rem; font-weight: 700; }
+      .hm-sub   { font-size: 0.63rem; color: var(--muted); margin-top: 1px; }
+      .sell-plan-title { font-size: 0.66rem; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
+      .sell-plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+      .sp-box { background: var(--red-bg); border: 1px solid var(--red); border-radius: 8px; padding: 5px 8px; }
       .sp-box.neutral { background: var(--bg); border-color: var(--border); }
-      .sp-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
-      .sp-val { font-size: 0.95rem; font-weight: 700; color: var(--red); }
-      .sp-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+      .sp-label { font-size: 0.62rem; color: var(--muted); margin-bottom: 2px; }
+      .sp-val { font-size: 0.85rem; font-weight: 700; color: var(--red); }
+      .sp-sub { font-size: 0.63rem; color: var(--muted); margin-top: 1px; }
       /* 一键下单按钮 */
       .trade-exec-btn {
-        display: block; width: 100%; margin-top: 9px;
-        padding: 9px 0; border: none; border-radius: 9px;
-        font-size: 0.88rem; font-weight: 700; cursor: pointer;
+        display: block; width: 100%; margin-top: 6px;
+        padding: 7px 0; border: none; border-radius: 8px;
+        font-size: 0.82rem; font-weight: 700; cursor: pointer;
         transition: opacity .15s;
       }
       .trade-exec-btn:active { opacity: .7; }
