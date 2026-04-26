@@ -1453,28 +1453,48 @@
             hmBtc.textContent    = liveBtcBalance.toFixed(6) + " BTC";
             hmBtcSub.textContent = "≈ $" + Math.round(btcNow).toLocaleString();
 
-            // 平均成本：从recent trades 取，如果取不到就显示 当前价
-            const recentTrades = window._lastTrades || [];
+            // 平均成本（含手续费）：从最新买入记录往回凑，直到累计数量 >= 当前持仓
+            const recentTrades = (window._lastTrades || []).slice().sort((a, b) => b.time - a.time);
             let avgCost = null;
             if (recentTrades.length > 0) {
-              // 取最近一批买入记录展示浮盈
-              const buyTrades = recentTrades.filter(t => t.isBuyer);
-              if (buyTrades.length > 0) {
-                const totalQty  = buyTrades.reduce((s, t) => s + parseFloat(t.qty), 0);
-                const totalCost = buyTrades.reduce((s, t) => s + parseFloat(t.qty) * parseFloat(t.price), 0);
-                avgCost = totalCost / totalQty;
+              let needed    = liveBtcBalance;   // 还需要匹配的 BTC 数量
+              let totalCost = 0;                // 总成本（含手续费折算 USDT）
+              let matched   = 0;                // 已匹配的 BTC 数量
+              for (const t of recentTrades) {
+                if (needed <= 0.000001) break;
+                if (!t.isBuyer) continue;       // 跳过卖出记录
+                const qty   = parseFloat(t.qty);
+                const take  = Math.min(qty, needed);  // 这笔只取需要的部分
+                const ratio = take / qty;
+                // 买入成本 = quoteQty（实际花费 USDT）
+                const quoteQty = parseFloat(t.quoteQty);
+                let   feeCost  = 0;
+                // 手续费换算为 USDT
+                if (t.commissionAsset === "USDT") {
+                  feeCost = parseFloat(t.commission) * ratio;
+                } else if (t.commissionAsset === "BTC") {
+                  // BTC 手续费按成交价折算
+                  feeCost = parseFloat(t.commission) * parseFloat(t.price) * ratio;
+                }
+                // BNB 手续费忽略（金额极小，约 0.075%，不影响展示）
+                totalCost += quoteQty * ratio + feeCost;
+                matched   += take;
+                needed    -= take;
+              }
+              if (matched > 0.000001) {
+                avgCost = totalCost / matched;
               }
             }
             if (avgCost && avgCost > 0) {
-              const pnlPct = (price / avgCost - 1) * 100;
+              const pnlPct  = (price / avgCost - 1) * 100;
               const pnlUsdt = (price - avgCost) * liveBtcBalance;
               hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
               hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT (均价 $" + Math.round(avgCost).toLocaleString() + ")";
+              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价含手续费 $" + Math.round(avgCost).toLocaleString() + "）";
             } else {
               hmPnl.textContent    = "--";
               hmPnl.style.color    = "var(--text)";
-              hmPnlSub.textContent = "同步买入记录可显示盈亏";
+              hmPnlSub.textContent = "同步账户后可显示实际盈亏";
             }
 
             // 止盈/止损参考价：基于布林带 + RSI + 设置的止损比例
