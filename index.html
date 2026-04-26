@@ -372,14 +372,7 @@
     <div class="col">
       <div class="col-header">
         <div class="col-title">📡 买入信号</div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div class="mode-toggle" id="modeToggle">
-            <button class="mode-btn active" id="modeAuto">自动</button>
-            <button class="mode-btn" id="modeDip">低吸</button>
-            <button class="mode-btn" id="modeTrend">趋势</button>
-          </div>
-          <button class="signal-refresh" id="signalRefresh">刷新</button>
-        </div>
+        <button class="signal-refresh" id="signalRefresh">刷新</button>
       </div>
       <div class="col-body" id="signalCard">
         <div class="signal-header">
@@ -942,7 +935,7 @@
 
           // 自动模式：判断当前是涨势还是震荡/回调，自动选策略
           const isTrending = rsi > 52 && maDiff > 0.5 && (macd ? macd.histogram > 0 : true);
-          const effectiveMode = signalMode === 'auto' ? (isTrending ? 'trend' : 'dip') : signalMode;
+          const effectiveMode = isTrending ? 'trend' : 'dip';
 
           if (effectiveMode === 'dip') {
             // 低吸模式：寻找超卖/回调机会
@@ -1023,10 +1016,9 @@
           signalTitle.textContent = lv[2];
           signalSub.textContent   = lv[3];
 
-          const modeNote = signalMode === 'auto'
-            ? (isTrending ? "【自动→趋势】检测到上涨动能，已切换为趋势策略。" : "【自动→低吸】当前无明显上涨趋势，已切换为低吸策略。")
-            : effectiveMode === 'dip' ? "【低吸模式】在下跌/超卖时给出信号。"
-            : "【趋势模式】在上涨动能充足时给出信号。";
+          const modeNote = isTrending
+            ? "当前处于上涨趋势（RSI偶正、价格站上均线、MACD多头），给出趋势信号。"
+            : "当前处于震荡/回调阶段，给出低吸信号。";
           signalNote.textContent =
             modeNote + " RSI：" + rsiText + "。均线：" + maText + "。涨跌：" + chgText +
             "。（数据来自 Binance 1小时K线，仅供参考，不构成投资建议）";
@@ -1035,19 +1027,6 @@
           signalSub.textContent   = "请检查网络连接后点击刷新";
         }
       }
-
-      let signalMode = 'auto'; // 'auto' | 'dip' | 'trend'
-      function setMode(m) {
-        signalMode = m;
-        ['modeAuto','modeDip','modeTrend'].forEach(id => {
-          const btn = document.getElementById(id);
-          if (btn) btn.classList.toggle('active', id === 'mode' + m.charAt(0).toUpperCase() + m.slice(1));
-        });
-        fetchSignal();
-      }
-      document.getElementById('modeAuto').addEventListener('click',  () => setMode('auto'));
-      document.getElementById('modeDip').addEventListener('click',   () => setMode('dip'));
-      document.getElementById('modeTrend').addEventListener('click', () => setMode('trend'));
 
       signalRefresh.addEventListener("click", fetchSignal);
       fetchSignal();
