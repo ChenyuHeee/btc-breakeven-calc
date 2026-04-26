@@ -843,7 +843,8 @@
           const account = await binanceSigned("/api/v3/account");
           const bals = account.balances || [];
           liveUsdtBalance = parseFloat(bals.find(b => b.asset === "USDT")?.free || 0);
-          liveBtcBalance  = parseFloat(bals.find(b => b.asset === "BTC")?.free  || 0);
+          const btcAsset  = bals.find(b => b.asset === "BTC");
+          liveBtcBalance  = parseFloat(btcAsset?.free || 0) + parseFloat(btcAsset?.locked || 0);
 
           const chUsdtEl = document.getElementById("chNow");
           if (chUsdtEl) chUsdtEl.textContent = fmt(liveUsdtBalance) + " U";
