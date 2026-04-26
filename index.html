@@ -741,10 +741,12 @@
                   symbol: "BTCUSDT",
                   side: "SELL",
                   quantity: safeQty,
-                  price: tpPrice,                  // 止盈限价单
-                  stopPrice: slTrigger,            // 止损触发价
-                  stopLimitPrice: slLimit,         // 止损限价
-                  stopLimitTimeInForce: "GTC"
+                  aboveType: "LIMIT_MAKER",        // 止盈限价单（高于市价）
+                  abovePrice: tpPrice,
+                  belowType: "STOP_LOSS_LIMIT",    // 止损单（低于市价）
+                  belowStopPrice: slTrigger,       // 止损触发价
+                  belowPrice: slLimit,             // 止损限价
+                  belowTimeInForce: "GTC"
                 });
                 omBody.innerHTML += `<div style="font-size:0.8rem;color:var(--green);margin-top:4px">✅ OCO 挂单成功！止盈 $${tpPrice.toLocaleString()} · 止损 $${slLimit.toLocaleString()}</div>
                   <div style="font-size:0.72rem;color:var(--muted)">OrderListId: ${ocoResult.orderListId}，关闭页面后订单仍有效</div>`;
