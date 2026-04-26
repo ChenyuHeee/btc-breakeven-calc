@@ -774,6 +774,7 @@
             chTradesWrap.style.display = "block";
           }
           updateChallenge();
+          fetchSignal(); // 同步后立即刷新信号按钮状态（liveUsdtBalance 已更新）
           chSyncBtn.textContent = "✅ 已同步"; chSyncBtn.className = "ch-btn sync-ok";
           setTimeout(() => { chSyncBtn.textContent = "🔄 同步账户"; chSyncBtn.className = "ch-btn"; }, 3000);
           const errEl = document.getElementById("chSyncErrMsg");
