@@ -205,6 +205,40 @@
       .sp-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
       .sp-val { font-size: 0.95rem; font-weight: 700; color: var(--red); }
       .sp-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+      /* 一键下单按钮 */
+      .trade-exec-btn {
+        display: block; width: 100%; margin-top: 9px;
+        padding: 9px 0; border: none; border-radius: 9px;
+        font-size: 0.88rem; font-weight: 700; cursor: pointer;
+        transition: opacity .15s;
+      }
+      .trade-exec-btn:active { opacity: .7; }
+      .exec-buy  { background: var(--green); color: #fff; }
+      .exec-sell { background: var(--red);   color: #fff; }
+      .exec-disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+      /* 下单确认弹窗 */
+      .order-modal-overlay {
+        position: fixed; inset: 0; background: rgba(0,0,0,.5);
+        display: flex; align-items: center; justify-content: center; z-index: 9999;
+      }
+      .order-modal {
+        background: var(--card); border-radius: 14px; padding: 22px 24px;
+        width: min(380px, 92vw); box-shadow: 0 8px 32px rgba(0,0,0,.18);
+      }
+      .order-modal-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 14px; }
+      .order-modal-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.88rem; }
+      .order-modal-row span:last-child { font-weight: 700; }
+      .order-modal-warn {
+        margin: 14px 0 16px; padding: 9px 11px; border-radius: 8px;
+        background: #fff5e0; border: 1px solid #e8b84b;
+        font-size: 0.75rem; color: #7a5a00; line-height: 1.5;
+      }
+      .order-modal-btns { display: flex; gap: 10px; }
+      .om-cancel-btn  { flex: 1; padding: 9px; border-radius: 8px; border: 1.5px solid var(--border); background: transparent; font-size: 0.88rem; cursor: pointer; }
+      .om-confirm-btn { flex: 2; padding: 9px; border-radius: 8px; border: none; font-size: 0.88rem; font-weight: 700; color: #fff; cursor: pointer; }
+      .om-confirm-btn.buy-btn  { background: var(--green); }
+      .om-confirm-btn.sell-btn { background: var(--red); }
+      .om-confirm-btn:disabled { opacity: .5; cursor: not-allowed; }
       #signalCard.sig-buy  { background: var(--green-bg); }
       #signalCard.sig-no   { background: var(--red-bg); }
       #signalCard.sig-wait { background: #fdfaf6; }
@@ -398,6 +432,7 @@
               <div class="tp-sub" id="tpStopSub"></div>
             </div>
           </div>
+          <button class="trade-exec-btn exec-disabled" id="execBuyBtn">🔒 一键买入（需先同步账户）</button>
         </div>
         <div class="sell-plan" id="sellPlan">
           <div class="sell-plan-title">🚨 卖出建议</div>
@@ -423,10 +458,24 @@
               <div class="sp-sub" id="spReasonSub"></div>
             </div>
           </div>
+          <button class="trade-exec-btn exec-disabled" id="execSellBtn">🔒 一键卖出（需先同步账户）</button>
         </div>
       </div>
     </div>
 
+  </div>
+
+  <!-- Order Confirm Modal -->
+  <div class="order-modal-overlay" id="orderModal" style="display:none">
+    <div class="order-modal">
+      <div class="order-modal-title" id="omTitle">确认下单</div>
+      <div id="omBody"></div>
+      <div class="order-modal-warn">⚠️ 此操作将直接在 Binance 现货账户执行市价单，成交后无法撤销。请确认账号已开启「现货交易」权限。</div>
+      <div class="order-modal-btns">
+        <button class="om-cancel-btn" id="omCancel">取消</button>
+        <button class="om-confirm-btn" id="omConfirm">确认下单</button>
+      </div>
+    </div>
   </div>
 
   <!-- Settings Modal -->
@@ -572,6 +621,69 @@
         );
         const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
         return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+      }
+
+      // POST 版签名请求（用于下单）
+      async function binanceSignedPost(path, params = {}) {
+        const apiKey = (LS.get("apiKey") || "").trim();
+        const secret = (LS.get("apiSecret") || "").trim();
+        if (!apiKey || !secret) throw new Error("未设置 API Key / Secret");
+        const proxy = (LS.get("proxy") || "").trim().replace(/\/$/, "");
+        const base  = proxy || BINANCE_API;
+        const ts    = Date.now();
+        const qBase = new URLSearchParams({ ...params, timestamp: ts }).toString();
+        const sig   = await hmacSHA256(secret, qBase);
+        const body  = qBase + "&signature=" + sig;
+        const res   = await fetch(base + path, {
+          method: "POST",
+          headers: { "X-MBX-APIKEY": apiKey, "Content-Type": "application/x-www-form-urlencoded" },
+          body
+        });
+        if (!res.ok) {
+          const raw = await res.text().catch(() => "");
+          let msg = "HTTP " + res.status;
+          try { const j = JSON.parse(raw); msg += "：" + (j.msg || raw.slice(0, 200)) + (j.code ? " (code " + j.code + ")" : ""); }
+          catch { if (raw) msg += "：" + raw.slice(0, 200); }
+          throw new Error(msg);
+        }
+        return res.json();
+      }
+
+      // 弹出确认对话框并在用户确认后下单
+      function showOrderModal({ title, rows, confirmClass, onConfirm }) {
+        omTitle.textContent = title;
+        omBody.innerHTML = rows.map(([k, v]) =>
+          `<div class="order-modal-row"><span>${k}</span><span>${v}</span></div>`
+        ).join("");
+        omConfirm.className = "om-confirm-btn " + confirmClass;
+        omConfirm.textContent = "确认下单";
+        omConfirm.disabled = false;
+        orderModal.style.display = "flex";
+        const doClose = () => { orderModal.style.display = "none"; omConfirm.onclick = null; omCancel.onclick = null; };
+        omCancel.onclick = doClose;
+        omConfirm.onclick = async () => {
+          omConfirm.textContent = "下单中...";
+          omConfirm.disabled = true;
+          try {
+            const result = await onConfirm();
+            const filled = result.executedQty ? parseFloat(result.executedQty).toFixed(6) : "";
+            const avg    = result.fills && result.fills.length
+              ? (result.fills.reduce((s, f) => s + parseFloat(f.price) * parseFloat(f.qty), 0) /
+                 result.fills.reduce((s, f) => s + parseFloat(f.qty), 0)).toFixed(1) : "";
+            omBody.innerHTML = `<div style="text-align:center;padding:10px 0;font-size:0.95rem;color:var(--green)">✅ 下单成功！</div>`
+              + `<div class="order-modal-row"><span>成交数量</span><span>${filled} BTC</span></div>`
+              + (avg ? `<div class="order-modal-row"><span>均价</span><span>$${parseFloat(avg).toLocaleString()}</span></div>` : "");
+            omConfirm.textContent = "关闭";
+            omConfirm.disabled = false;
+            omConfirm.onclick = doClose;
+            setTimeout(syncAccount, 2000); // 2秒后自动刷新余额
+          } catch(e) {
+            omBody.innerHTML = `<div style="color:var(--red);font-size:0.82rem;word-break:break-word">❌ 下单失败：${e.message}</div>`;
+            omConfirm.textContent = "关闭";
+            omConfirm.disabled = false;
+            omConfirm.onclick = doClose;
+          }
+        };
       }
 
       async function binanceSigned(path, params = {}) {
@@ -786,6 +898,13 @@
       const tpTargetSub   = document.getElementById("tpTargetSub");
       const tpStop        = document.getElementById("tpStop");
       const tpStopSub     = document.getElementById("tpStopSub");
+      const execBuyBtn    = document.getElementById("execBuyBtn");
+      const execSellBtn   = document.getElementById("execSellBtn");
+      const orderModal    = document.getElementById("orderModal");
+      const omTitle       = document.getElementById("omTitle");
+      const omBody        = document.getElementById("omBody");
+      const omCancel      = document.getElementById("omCancel");
+      const omConfirm     = document.getElementById("omConfirm");
       const sellPlan      = document.getElementById("sellPlan");
       const spAction      = document.getElementById("spAction");
       const spActionSub   = document.getElementById("spActionSub");
@@ -1117,6 +1236,9 @@
           const stopPct    = chStopPct || 15;
           const isBuySignal = lv[4] === "sig-buy";
 
+          // ── 更新一键下单按钮 ──
+          const hasApiKey = !!(LS.get("apiKey") || "").trim();
+
           if (isBuySignal) {
             tradePlan.style.display = "block";
 
@@ -1163,8 +1285,37 @@
             tpStop.textContent = "$" + Math.round(stopPrice).toLocaleString();
             tpStop.style.color = "var(--red)";
             tpStopSub.textContent = "-" + effectiveStopPct + "% 止损";
+
+            // 买入按钮
+            if (hasApiKey && liveUsdtBalance !== null && liveUsdtBalance > 1) {
+              const buyUsdt = +(capital * posPct / 100).toFixed(2);
+              execBuyBtn.className = "trade-exec-btn exec-buy";
+              execBuyBtn.textContent = "⚡ 一键买入 " + buyUsdt.toLocaleString() + " USDT";
+              execBuyBtn.onclick = () => showOrderModal({
+                title: "确认买入 BTC",
+                rows: [
+                  ["交易对", "BTC / USDT 现货"],
+                  ["方向", "市价买入"],
+                  ["花费金额", buyUsdt.toLocaleString() + " USDT"],
+                  ["目标价", "$" + Math.round(targetPrice).toLocaleString()],
+                  ["止损参考", "$" + Math.round(stopPrice).toLocaleString()]
+                ],
+                confirmClass: "buy-btn",
+                onConfirm: () => binanceSignedPost("/api/v3/order", {
+                  symbol: "BTCUSDT", side: "BUY", type: "MARKET",
+                  quoteOrderQty: buyUsdt
+                })
+              });
+            } else {
+              execBuyBtn.className = "trade-exec-btn exec-disabled";
+              execBuyBtn.textContent = hasApiKey ? "🔒 余额不足（USDT < 1）" : "🔒 一键买入（需先同步账户）";
+              execBuyBtn.onclick = null;
+            }
           } else {
             tradePlan.style.display = "none";
+            execBuyBtn.className = "trade-exec-btn exec-disabled";
+            execBuyBtn.textContent = "🔒 一键买入（需信号触发）";
+            execBuyBtn.onclick = null;
           }
 
           // ── 卖出信号评分 ──
@@ -1217,8 +1368,37 @@
             spPriceSub.textContent  = "当前价，可挂稍高限价单";
             spReason.textContent    = sellReasons.slice(0, 2).join(" · ");
             spReasonSub.textContent = sellReasons.length > 2 ? "+ " + sellReasons.slice(2).join(" · ") : "";
+
+            // 卖出按钮
+            if (hasApiKey && hasBtc) {
+              const sellQty = +(liveBtcBalance * sellRatioPct / 100).toFixed(6);
+              execSellBtn.className = "trade-exec-btn exec-sell";
+              execSellBtn.textContent = "⚡ 一键卖出 " + sellQty + " BTC (" + sellRatioPct + "%)";
+              execSellBtn.onclick = () => showOrderModal({
+                title: "确认卖出 BTC",
+                rows: [
+                  ["交易对", "BTC / USDT 现货"],
+                  ["方向", "市价卖出"],
+                  ["卖出数量", sellQty + " BTC"],
+                  ["当前参考价", "$" + Math.round(price).toLocaleString()],
+                  ["主要原因", sellReasons.slice(0,2).join(" · ")]
+                ],
+                confirmClass: "sell-btn",
+                onConfirm: () => binanceSignedPost("/api/v3/order", {
+                  symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                  quantity: sellQty
+                })
+              });
+            } else {
+              execSellBtn.className = "trade-exec-btn exec-disabled";
+              execSellBtn.textContent = hasApiKey ? "🔒 卖出（需同步账户查看 BTC 余额）" : "🔒 一键卖出（需先同步账户）";
+              execSellBtn.onclick = null;
+            }
           } else {
             sellPlan.style.display = "none";
+            execSellBtn.className = "trade-exec-btn exec-disabled";
+            execSellBtn.textContent = "🔒 一键卖出（需信号触发）";
+            execSellBtn.onclick = null;
           }
         } catch (e) {
           signalTitle.textContent = "获取数据失败";
