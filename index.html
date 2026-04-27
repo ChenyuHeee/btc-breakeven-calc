@@ -1392,7 +1392,7 @@
         const c         = _signalCache;
         const hasApiKey = !!(LS.get("apiKey") || "").trim();
         const hasBtc    = liveBtcBalance !== null && liveBtcBalance > 0.00001;
-        const stopPct   = chStopPct || 15;
+        const stopPct   = chStopPct > 0 ? chStopPct : 3;
 
         // ── 买入建议：目标价 / 止损价 ──
         // 只在按钮处于激活状态时更新（避免覆盖下单后的防重复保护）
@@ -1804,7 +1804,7 @@
 
           // ── 交易建议 ──
           const capital    = liveUsdtBalance !== null ? liveUsdtBalance : (chStartVal || 0);
-          const stopPct    = chStopPct || 15;
+          const stopPct    = chStopPct > 0 ? chStopPct : 3;
           // 合约模式更严格：score >= 3 且 MACD 不空头加速 且 价格在 EMA21 之上
           const baseIsBuy = lv[4] === "sig-buy";
           const futuresExtraCheck = !futuresMode || (
