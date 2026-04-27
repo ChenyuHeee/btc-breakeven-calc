@@ -1411,8 +1411,10 @@
           if (hasApiKey && liveUsdtBalance !== null && liveUsdtBalance > 1) {
             const posPct  = c.score >= 5 ? 30 : c.score >= 3 ? 20 : 10;
             const rawUsdt = liveUsdtBalance * posPct / 100;
+            // 合约模式：确保buyUsdt足够开0.001 BTC（最低保证金），但不超过50%余额
+            const minFuturesUsdt = futuresMode ? Math.ceil(price * 0.001 / 3 * 100) / 100 : 0;
             const buyUsdt = futuresMode
-              ? +Math.min(rawUsdt, liveUsdtBalance * 0.5).toFixed(2)
+              ? +Math.min(Math.max(rawUsdt, minFuturesUsdt), liveUsdtBalance * 0.5).toFixed(2)
               : +rawUsdt.toFixed(2);
             if (futuresMode) {
               const LEV    = 3;
@@ -1476,9 +1478,12 @@
             const avgCost = liveFuturesPosition.entryPrice;
             const pnl     = liveFuturesPosition.unrealizedPnl;
             const pnlPct  = (price / avgCost - 1) * 100;
+            // 合约手续费估算：taker 0.05% × 名义价值 × 2（开+平）
+            const feeEst  = Math.abs(liveFuturesPosition.qty) * avgCost * 0.001;
+            const pnlNet  = pnl - feeEst;
             hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
-            hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-            hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "，⚠️未含手续费）";
+            hmPnl.style.color    = pnlNet >= 0 ? "var(--green)" : "var(--red)";
+            hmPnlSub.textContent = (pnlNet >= 0 ? "+" : "") + pnlNet.toFixed(2) + " USDT（含手续费，均价 $" + Math.round(avgCost).toLocaleString() + "）";
           } else {
             const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time);
             // 找最近一次卖出时间
@@ -1965,9 +1970,11 @@
               avgCost = liveFuturesPosition.entryPrice;
               const pnl    = liveFuturesPosition.unrealizedPnl;
               const pnlPct = (price / avgCost - 1) * 100;
+              const feeEst = Math.abs(liveFuturesPosition.qty) * avgCost * 0.001;
+              const pnlNet = pnl - feeEst;
               hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
-              hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-              hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "，⚠️未含手续费）";
+              hmPnl.style.color    = pnlNet >= 0 ? "var(--green)" : "var(--red)";
+              hmPnlSub.textContent = (pnlNet >= 0 ? "+" : "") + pnlNet.toFixed(2) + " USDT（含手续费，均价 $" + Math.round(avgCost).toLocaleString() + "）";
             } else {
               const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time);
               // 找最近一次卖出时间
