@@ -1015,12 +1015,26 @@
           window._lastTrades = trades; // 供持仓监控面板计算均价使用
           chTradesEl.innerHTML = "";
           if (trades.length > 0) {
-            trades.slice().reverse().forEach(t => {
-              const side = t.isBuyer ? "BUY" : "SELL";
-              const d = new Date(t.time);
+            // 按 orderId 合并多个成交明细为一笔订单
+            const orderMap = new Map();
+            trades.forEach(t => {
+              const id = t.orderId;
+              if (!orderMap.has(id)) {
+                orderMap.set(id, { isBuyer: t.isBuyer, qty: 0, quoteQty: 0, time: t.time });
+              }
+              const o = orderMap.get(id);
+              o.qty      += parseFloat(t.qty);
+              o.quoteQty += parseFloat(t.quoteQty);
+              if (t.time > o.time) o.time = t.time;
+            });
+            const orders = [...orderMap.values()].sort((a, b) => b.time - a.time);
+            orders.forEach(o => {
+              const side = o.isBuyer ? "BUY" : "SELL";
+              const avgP = o.quoteQty / o.qty;
+              const d  = new Date(o.time);
               const ds = (d.getMonth()+1)+"/"+d.getDate()+" "+d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0");
               const row = document.createElement("div"); row.className = "ch-trade-row";
-              row.innerHTML = `<span class="ch-trade-side ${side.toLowerCase()}">${side}</span><span class="ch-trade-info">${fmt(parseFloat(t.qty),6)} BTC @ ${fmt(parseFloat(t.price))}</span><span class="ch-trade-info">${ds}</span>`;
+              row.innerHTML = `<span class="ch-trade-side ${side.toLowerCase()}">${side}</span><span class="ch-trade-info">${fmt(o.qty,6)} BTC @ ${fmt(avgP)}</span><span class="ch-trade-info">${ds}</span>`;
               chTradesEl.appendChild(row);
             });
             chTradesWrap.style.display = "block";
@@ -1067,15 +1081,29 @@
 
           // 合约成交记录
           const trades = await fapiGet("/fapi/v1/userTrades", { symbol: "BTCUSDT", limit: 50 });
-          window._lastTrades = trades.map(t => ({ ...t, isBuyer: t.side === "BUY" }));
+          window._lastTrades = trades.map(t => ({ ...t, isBuyer: t.buyer }));
           chTradesEl.innerHTML = "";
           if (trades.length > 0) {
-            trades.slice().reverse().forEach(t => {
-              const side = t.buyer ? "BUY" : "SELL";
-              const d  = new Date(t.time);
+            // 按 orderId 合并多个成交明细为一笔订单
+            const orderMap = new Map();
+            trades.forEach(t => {
+              const id = t.orderId;
+              if (!orderMap.has(id)) {
+                orderMap.set(id, { isBuyer: t.buyer, qty: 0, quoteQty: 0, time: t.time });
+              }
+              const o = orderMap.get(id);
+              o.qty      += parseFloat(t.qty);
+              o.quoteQty += parseFloat(t.qty) * parseFloat(t.price);
+              if (t.time > o.time) o.time = t.time;
+            });
+            const orders = [...orderMap.values()].sort((a, b) => b.time - a.time);
+            orders.forEach(o => {
+              const side = o.isBuyer ? "BUY" : "SELL";
+              const avgP = o.quoteQty / o.qty;
+              const d  = new Date(o.time);
               const ds = (d.getMonth()+1)+"/"+d.getDate()+" "+d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0");
               const row = document.createElement("div"); row.className = "ch-trade-row";
-              row.innerHTML = `<span class="ch-trade-side ${side.toLowerCase()}">${side}</span><span class="ch-trade-info">${fmt(parseFloat(t.qty),6)} BTC @ ${fmt(parseFloat(t.price))}</span><span class="ch-trade-info">${ds}</span>`;
+              row.innerHTML = `<span class="ch-trade-side ${side.toLowerCase()}">${side}</span><span class="ch-trade-info">${fmt(o.qty,6)} BTC @ ${fmt(avgP)}</span><span class="ch-trade-info">${ds}</span>`;
               chTradesEl.appendChild(row);
             });
             chTradesWrap.style.display = "block";
