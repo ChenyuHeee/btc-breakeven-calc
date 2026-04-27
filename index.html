@@ -1015,7 +1015,7 @@
           if (chUsdtEl) chUsdtEl.textContent = fmt(liveUsdtBalance) + " U";
 
           // Recent trades
-          const trades = await binanceSigned("/api/v3/myTrades", { symbol: "BTCUSDT", limit: 50 });
+          const trades = await binanceSigned("/api/v3/myTrades", { symbol: "BTCUSDT", limit: 500 });
           window._lastTrades = trades; // 供持仓监控面板计算均价使用
           chTradesEl.innerHTML = "";
           if (trades.length > 0) {
@@ -1916,16 +1916,16 @@
               if (avgCost && avgCost > 0) {
                 const pnlPct  = (price / avgCost - 1) * 100;
                 const pnlUsdt = (price - avgCost) * liveBtcBalance;
+                const incomplete = matched < liveBtcBalance * 0.99;
                 hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
                 hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-                hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价含手续费 $" + Math.round(avgCost).toLocaleString() + "）";
+                hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价含手续费 $" + Math.round(avgCost).toLocaleString() + (incomplete ? "  ⚠️历史记录不全" : "") + "）";
               } else {
                 hmPnl.textContent    = "--";
                 hmPnl.style.color    = "var(--text)";
                 hmPnlSub.textContent = "同步账户后可显示实际盈亏";
               }
             }
-
             const tgtPct = boll ? Math.max(4, Math.min(20, (boll.upper - price) / price * 100)) : 8;
             const stpPct = chStopPct || 15;
             hmTarget.textContent    = "$" + Math.round(price * (1 + tgtPct / 100)).toLocaleString();
