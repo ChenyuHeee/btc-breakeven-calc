@@ -1747,7 +1747,14 @@
           // ── 交易建议 ──
           const capital    = liveUsdtBalance !== null ? liveUsdtBalance : (chStartVal || 0);
           const stopPct    = chStopPct || 15;
-          const isBuySignal = lv[4] === "sig-buy";
+          // 合约模式更严格：score >= 3 且 MACD 不空头加速 且 价格在 EMA21 之上
+          const baseIsBuy = lv[4] === "sig-buy";
+          const futuresExtraCheck = !futuresMode || (
+            score >= 3 &&
+            (macd ? macd.histogram > -0.001 : true) &&
+            (ema21 ? price >= ema21 * 0.998 : true)
+          );
+          const isBuySignal = baseIsBuy && futuresExtraCheck;
           const hasApiKey = !!(LS.get("apiKey") || "").trim();
 
           if (isBuySignal) {
