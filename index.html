@@ -662,7 +662,7 @@
 
       let chStartVal = LS.get("start") ?? null;
       let chMultVal  = LS.get("mult")  ?? 2;
-      let chStopPct  = LS.get("stop")  ?? 15;
+      let chStopPct  = LS.get("stop")  ?? 3;
       let liveUsdtBalance    = null;
       let liveBtcBalance      = null;  // free + locked（持仓显示用）
       let liveBtcFree         = null;  // 仅 free（卖出下单用）
@@ -1382,9 +1382,9 @@
           let targetPct;
           if (c.effectiveMode === 'dip') {
             const bp = c.bollUpper ? (c.bollUpper - price) / price * 100 : 0;
-            targetPct = Math.max(5, Math.min(20, bp));
+            targetPct = Math.max(3, Math.min(10, bp));
           } else {
-            targetPct = c.score >= 5 ? 12 : c.score >= 3 ? 8 : 5;
+            targetPct = c.score >= 5 ? 5 : c.score >= 3 ? 3 : 2;
           }
           const targetPrice = price * (1 + targetPct / 100);
           const stopPrice   = price * (1 - effectiveStopPct / 100);
@@ -1765,9 +1765,9 @@
             let targetPct;
             if (effectiveMode === 'dip') {
               const bollTargetPct = boll ? (boll.upper - price) / price * 100 : 0;
-              targetPct = Math.max(5, Math.min(20, bollTargetPct));
+              targetPct = Math.max(3, Math.min(10, bollTargetPct));
             } else {
-              targetPct = score >= 5 ? 12 : score >= 3 ? 8 : 5;
+              targetPct = score >= 5 ? 5 : score >= 3 ? 3 : 2;
             }
             const targetPrice = price * (1 + targetPct / 100);
             tpTarget.textContent = "$" + Math.round(targetPrice).toLocaleString();
