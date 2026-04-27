@@ -1485,10 +1485,11 @@
           if (futuresMode && liveFuturesPosition && liveFuturesPosition.entryPrice > 0) {
             const avgCost = liveFuturesPosition.entryPrice;
             const pnl     = liveFuturesPosition.unrealizedPnl;
-            const pnlPct  = (price / avgCost - 1) * 100;
             // 合约手续费估算：taker 0.05% × 名义价值 × 2（开+平）
             const feeEst  = Math.abs(liveFuturesPosition.qty) * avgCost * 0.001;
             const pnlNet  = pnl - feeEst;
+            const nominalVal = Math.abs(liveFuturesPosition.qty) * avgCost;
+            const pnlPct  = nominalVal > 0 ? pnlNet / nominalVal * 100 : 0;
             hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
             hmPnl.style.color    = pnlNet >= 0 ? "var(--green)" : "var(--red)";
             hmPnlSub.textContent = (pnlNet >= 0 ? "+" : "") + pnlNet.toFixed(2) + " USDT（含手续费，均价 $" + Math.round(avgCost).toLocaleString() + "）";
@@ -1978,9 +1979,10 @@
             if (futuresMode && liveFuturesPosition && liveFuturesPosition.entryPrice > 0) {
               avgCost = liveFuturesPosition.entryPrice;
               const pnl    = liveFuturesPosition.unrealizedPnl;
-              const pnlPct = (price / avgCost - 1) * 100;
               const feeEst = Math.abs(liveFuturesPosition.qty) * avgCost * 0.001;
               const pnlNet = pnl - feeEst;
+              const nominalVal = Math.abs(liveFuturesPosition.qty) * avgCost;
+              const pnlPct = nominalVal > 0 ? pnlNet / nominalVal * 100 : 0;
               hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
               hmPnl.style.color    = pnlNet >= 0 ? "var(--green)" : "var(--red)";
               hmPnlSub.textContent = (pnlNet >= 0 ? "+" : "") + pnlNet.toFixed(2) + " USDT（含手续费，均价 $" + Math.round(avgCost).toLocaleString() + "）";
