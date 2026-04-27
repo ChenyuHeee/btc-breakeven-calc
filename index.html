@@ -1791,7 +1791,12 @@
             tpStopSub.textContent = "-" + effectiveStopPct + "% 止损";
 
             if (hasApiKey && liveUsdtBalance !== null && liveUsdtBalance > 1) {
-              const buyUsdt = +(capital * posPct / 100).toFixed(2);
+              // 合约模式仓位保守：最多用可用余额50%作为保证金（避免手续费导致余额不足）
+              // 现货模式按评分用 90%/70%/50%
+              const rawUsdt = capital * posPct / 100;
+              const buyUsdt = futuresMode
+                ? +Math.min(rawUsdt, liveUsdtBalance * 0.5).toFixed(2)
+                : +rawUsdt.toFixed(2);
               execBuyBtn.className = "trade-exec-btn exec-buy";
               if (futuresMode) {
                 // \u5408\u7ea6\u6a21\u5f0f\uff1a\u7528\u6740 3x \u5f00\u591a
