@@ -1478,7 +1478,7 @@
             const pnlPct  = (price / avgCost - 1) * 100;
             hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
             hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-            hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "）";
+            hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "，⚠️未含手续费）";
           } else {
             const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time);
             // 找最近一次卖出时间
@@ -1919,12 +1919,12 @@
           let sellScore = 0;
           const sellReasons = [];
 
-          if      (rsi1h > 80)        { sellScore += 4; sellReasons.push("RSI 5m " + rsi1h.toFixed(0) + " 极度超买"); }
-          else if (rsi1h > 70)        { sellScore += 3; sellReasons.push("RSI 5m " + rsi1h.toFixed(0) + " 超买"); }
-          else if (rsi1h > 65)        { sellScore += 1; sellReasons.push("RSI 5m 偏高"); }
+          if      (rsi1h > 80)        { sellScore += 4; sellReasons.push("RSI 1h " + rsi1h.toFixed(0) + " 极度超买"); }
+          else if (rsi1h > 70)        { sellScore += 3; sellReasons.push("RSI 1h " + rsi1h.toFixed(0) + " 超买"); }
+          else if (rsi1h > 65)        { sellScore += 1; sellReasons.push("RSI 1h 偏高"); }
           if (rsi4h != null) {
-            if      (rsi4h > 75)      { sellScore += 3; sellReasons.push("RSI 15m " + rsi4h.toFixed(0) + " 超买"); }
-            else if (rsi4h > 65)      { sellScore += 2; sellReasons.push("RSI 15m 偏高"); }
+            if      (rsi4h > 75)      { sellScore += 3; sellReasons.push("RSI 4h " + rsi4h.toFixed(0) + " 超买"); }
+            else if (rsi4h > 65)      { sellScore += 2; sellReasons.push("RSI 4h 偏高"); }
           }
           if      (bollPct > 95)      { sellScore += 4; sellReasons.push("突破布林上轨"); }
           else if (bollPct > 85)      { sellScore += 2; sellReasons.push("布林带上轨区"); }
@@ -1967,7 +1967,7 @@
               const pnlPct = (price / avgCost - 1) * 100;
               hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
               hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-              hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "）";
+              hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "，⚠️未含手续费）";
             } else {
               const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time);
               // 找最近一次卖出时间
