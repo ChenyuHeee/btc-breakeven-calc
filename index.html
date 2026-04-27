@@ -1493,7 +1493,7 @@
           if (isBuySignal) {
             tradePlan.style.display = "block";
 
-            const posPct = score >= 5 ? 30 : score >= 3 ? 20 : 10;
+            const posPct = score >= 5 ? 90 : score >= 3 ? 70 : 50;
             tpPosition.textContent = posPct + "%";
             tpPosition.style.color = "var(--green)";
             if (capital > 0) {
@@ -1504,10 +1504,10 @@
 
             const bollWidth = boll ? (boll.upper - boll.lower) / boll.mid * 100 : 5;
             let lev = 1;
-            if      (score >= 5 && isTrending && bollWidth < 8)  lev = 3;
-            else if (score >= 5 && bollWidth < 10)               lev = 2;
-            else if (score >= 3 && bollWidth < 8)                lev = 2;
-            else                                                  lev = 1;
+            if      (score >= 5 && isTrending)  lev = 3;
+            else if (score >= 5)                 lev = 2;
+            else if (score >= 3)                 lev = 2;
+            else                                 lev = 1;
             tpLeverage.textContent = lev + "x";
             tpLeverage.style.color = lev >= 3 ? "var(--red)" : lev === 2 ? "#c26a27" : "var(--green)";
             tpLeverageSub.textContent = lev === 1 ? "现货，无爆仓风险" : lev === 2 ? "轻杠杆，控制好止损" : "高杠杆，严格止损";
