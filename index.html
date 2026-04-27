@@ -462,6 +462,10 @@
           </div>
         </div>
         <div class="signal-note" id="signalNote"></div>
+        <div style="display:flex;align-items:center;gap:6px;margin:7px 0 4px">
+          <span style="font-size:0.75rem;color:var(--muted)">交易模式：</span>
+          <button id="modeToggleBtn" style="font-size:0.75rem;padding:3px 10px;border-radius:20px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-weight:600">现货</button>
+        </div>
         <div class="trade-plan" id="tradePlan">
           <div class="trade-plan-title">📋 买入建议</div>
           <div class="trade-plan-grid">
@@ -588,7 +592,7 @@
       }});
     }
     const url = new URL(request.url);
-    const target = 'https://api.binance.com' + url.pathname + url.search;
+    const target = (url.pathname.startsWith('/fapi/') ? 'https://fapi.binance.com' : 'https://api.binance.com') + url.pathname + url.search;
     const headers = new Headers();
     const apiKey = request.headers.get('X-MBX-APIKEY');
     if (apiKey) headers.set('X-MBX-APIKEY', apiKey);
@@ -614,7 +618,8 @@
 
     <script>
       const BINANCE_WS  = "wss://stream.binance.com:9443/ws/btcusdt@trade";
-      const BINANCE_API = "https://api.binance.com";
+      const BINANCE_API  = "https://api.binance.com";
+      const FAPI_URL     = "https://fapi.binance.com";
 
       const livePriceEl     = document.getElementById("livePrice");
       const wsDotEl         = document.getElementById("wsDot");
@@ -657,9 +662,11 @@
       let chStartVal = LS.get("start") ?? null;
       let chMultVal  = LS.get("mult")  ?? 2;
       let chStopPct  = LS.get("stop")  ?? 15;
-      let liveUsdtBalance = null;
-      let liveBtcBalance  = null;  // free + locked（持仓显示用）
-      let liveBtcFree     = null;  // 仅 free（卖出下单用）
+      let liveUsdtBalance    = null;
+      let liveBtcBalance      = null;  // free + locked（持仓显示用）
+      let liveBtcFree         = null;  // 仅 free（卖出下单用）
+      let liveFuturesPosition = null;  // { qty, entryPrice, unrealizedPnl }
+      let futuresMode         = LS.get("futuresMode") ?? false;
       let _signalCache    = null;
       let _klinesCache    = null;
       let _signalThrottle = null;
@@ -709,8 +716,77 @@
         return res.json();
       }
 
+      // U本位合约（fapi）POST/DELETE
+      async function fapiPost(path, params = {}, method = "POST") {
+        const apiKey = (LS.get("apiKey") || "").trim();
+        const secret = (LS.get("apiSecret") || "").trim();
+        if (!apiKey || !secret) throw new Error("未设置 API Key / Secret");
+        const proxy = (LS.get("proxy") || "").trim().replace(/\/$/, "");
+        const base  = proxy || FAPI_URL;
+        const ts    = Date.now();
+        const qBase = new URLSearchParams({ ...params, timestamp: ts }).toString();
+        const sig   = await hmacSHA256(secret, qBase);
+        const body  = qBase + "&signature=" + sig;
+        const res   = await fetch(base + path, {
+          method,
+          headers: { "X-MBX-APIKEY": apiKey, "Content-Type": "application/x-www-form-urlencoded" },
+          body
+        });
+        if (!res.ok) {
+          const raw = await res.text().catch(() => "");
+          let msg = "HTTP " + res.status;
+          try { const j = JSON.parse(raw); msg += "：" + (j.msg || raw.slice(0, 200)) + (j.code ? " (code " + j.code + ")" : ""); }
+          catch { if (raw) msg += "：" + raw.slice(0, 200); }
+          throw new Error(msg);
+        }
+        return res.json();
+      }
+
+      // U本位合约（fapi）GET
+      async function fapiGet(path, params = {}) {
+        const apiKey = (LS.get("apiKey") || "").trim();
+        const secret = (LS.get("apiSecret") || "").trim();
+        if (!apiKey || !secret) throw new Error("未设置 API Key");
+        const proxy = (LS.get("proxy") || "").trim().replace(/\/$/, "");
+        const base  = proxy || FAPI_URL;
+        const ts    = Date.now();
+        const qBase = new URLSearchParams({ ...params, timestamp: ts }).toString();
+        const sig   = await hmacSHA256(secret, qBase);
+        const url   = base + path + "?" + qBase + "&signature=" + sig;
+        const res   = await fetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
+        if (!res.ok) {
+          const raw = await res.text().catch(() => "");
+          let msg = "HTTP " + res.status;
+          try { const j = JSON.parse(raw); msg += "：" + (j.msg || raw.slice(0, 200)); }
+          catch { if (raw) msg += "：" + raw.slice(0, 200); }
+          throw new Error(msg);
+        }
+        return res.json();
+      }
+
+      // 切换模式按钮
+      const modeToggleBtn = document.getElementById("modeToggleBtn");
+      function applyModeToggleUI() {
+        if (modeToggleBtn) {
+          modeToggleBtn.textContent = futuresMode ? "合约 3x" : "现货";
+          modeToggleBtn.style.background    = futuresMode ? "var(--accent)" : "transparent";
+          modeToggleBtn.style.color         = futuresMode ? "#fff" : "var(--accent)";
+        }
+      }
+      applyModeToggleUI();
+      if (modeToggleBtn) {
+        modeToggleBtn.addEventListener("click", () => {
+          futuresMode = !futuresMode;
+          LS.set("futuresMode", futuresMode);
+          applyModeToggleUI();
+          // 重置持仓数据，让 calcAndRenderSignal 重新渲染
+          liveUsdtBalance = null; liveBtcBalance = null; liveBtcFree = null; liveFuturesPosition = null;
+          if (_klinesCache) calcAndRenderSignal(currentMarketPrice || 0);
+        });
+      }
+
       // 弹出确认对话框并在用户确认后下单
-      function showOrderModal({ title, rows, confirmClass, execBtn, ocoParams, successMsg, onConfirm }) {
+      function showOrderModal({ title, rows, confirmClass, execBtn, ocoParams, futuresTpSl, successMsg, onConfirm }) {
         omTitle.textContent = title;
         omBody.innerHTML = rows.map(([k, v]) =>
           `<div class="order-modal-row"><span>${k}</span><span>${v}</span></div>`
@@ -734,7 +810,31 @@
               + `<div class="order-modal-row"><span>成交数量</span><span>${filled} BTC</span></div>`
               + (avg ? `<div class="order-modal-row"><span>均价</span><span>$${parseFloat(avg).toLocaleString()}</span></div>` : "");
 
-            // 自动挂 OCO 止盈止损单
+            // 合约模式：自动挂 TP/SL 单
+            if (futuresTpSl && filled && parseFloat(filled) > 0.000001) {
+              omBody.innerHTML += `<div style="font-size:0.8rem;color:var(--muted);margin-top:8px">⏳ 正在挂合约止盈止损...</div>`;
+              try {
+                const tpPrice = Math.round(futuresTpSl.targetPrice);
+                const slPrice = Math.round(futuresTpSl.stopPrice);
+                await fapiPost("/fapi/v1/order", {
+                  symbol: "BTCUSDT", side: "SELL", type: "TAKE_PROFIT_MARKET",
+                  stopPrice: tpPrice, closePosition: "true",
+                  timeInForce: "GTE_GTC", workingType: "MARK_PRICE"
+                });
+                await fapiPost("/fapi/v1/order", {
+                  symbol: "BTCUSDT", side: "SELL", type: "STOP_MARKET",
+                  stopPrice: slPrice, closePosition: "true",
+                  timeInForce: "GTE_GTC", workingType: "MARK_PRICE"
+                });
+                omBody.innerHTML += `<div style="font-size:0.8rem;color:var(--green);margin-top:4px">✅ 合约 TP/SL 已挂单！止盈 $${tpPrice.toLocaleString()} · 止损 $${slPrice.toLocaleString()}</div>
+                  <div style="font-size:0.72rem;color:var(--muted)">关闭页面后订单仍有效</div>`;
+              } catch(tpSlErr) {
+                omBody.innerHTML += `<div style="font-size:0.78rem;color:var(--red);margin-top:4px">⚠️ TP/SL 挂单失败：${tpSlErr.message}</div>
+                  <div style="font-size:0.72rem;color:var(--muted)">请到 Binance 手动设置止盈止损</div>`;
+              }
+            }
+
+            // 现货模式：自动挂 OCO 止盈止损单
             if (ocoParams && filled && parseFloat(filled) > 0.000001) {
               omBody.innerHTML += `<div style="font-size:0.8rem;color:var(--muted);margin-top:8px">⏳ 正在挂 OCO 止盈止损单...</div>`;
               try {
@@ -848,6 +948,7 @@
       }
 
       async function syncAccount() {
+        if (futuresMode) { await syncFuturesAccount(); return; }
         chSyncBtn.textContent = "同步中..."; chSyncBtn.className = "ch-btn";
         try {
           const account = await binanceSigned("/api/v3/account");
@@ -893,6 +994,56 @@
       }
 
       chSyncBtn.addEventListener("click", syncAccount);
+
+      // 合约账户同步
+      async function syncFuturesAccount() {
+        chSyncBtn.textContent = "同步中..."; chSyncBtn.className = "ch-btn";
+        try {
+          const balances = await fapiGet("/fapi/v2/balance");
+          const usdt = balances.find(b => b.asset === "USDT");
+          liveUsdtBalance = usdt ? parseFloat(usdt.availableBalance) : 0;
+
+          const positions = await fapiGet("/fapi/v2/positionRisk", { symbol: "BTCUSDT" });
+          const pos = positions.find(p => p.symbol === "BTCUSDT" && Math.abs(parseFloat(p.positionAmt)) > 0.000001);
+          liveFuturesPosition = pos ? {
+            qty:          parseFloat(pos.positionAmt),
+            entryPrice:   parseFloat(pos.entryPrice),
+            unrealizedPnl: parseFloat(pos.unRealizedProfit)
+          } : null;
+          liveBtcBalance = liveFuturesPosition ? Math.abs(liveFuturesPosition.qty) : 0;
+          liveBtcFree    = liveBtcBalance;
+
+          const chUsdtEl = document.getElementById("chNow");
+          if (chUsdtEl) chUsdtEl.textContent = fmt(liveUsdtBalance) + " U(合约)";
+
+          // 合约成交记录
+          const trades = await fapiGet("/fapi/v1/userTrades", { symbol: "BTCUSDT", limit: 50 });
+          window._lastTrades = trades.map(t => ({ ...t, isBuyer: t.side === "BUY" }));
+          chTradesEl.innerHTML = "";
+          if (trades.length > 0) {
+            trades.slice().reverse().forEach(t => {
+              const side = t.buyer ? "BUY" : "SELL";
+              const d  = new Date(t.time);
+              const ds = (d.getMonth()+1)+"/"+d.getDate()+" "+d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0");
+              const row = document.createElement("div"); row.className = "ch-trade-row";
+              row.innerHTML = `<span class="ch-trade-side ${side.toLowerCase()}">${side}</span><span class="ch-trade-info">${fmt(parseFloat(t.qty),6)} BTC @ ${fmt(parseFloat(t.price))}</span><span class="ch-trade-info">${ds}</span>`;
+              chTradesEl.appendChild(row);
+            });
+            chTradesWrap.style.display = "block";
+          }
+          updateChallenge();
+          fetchSignal();
+          chSyncBtn.textContent = "✅ 已同步(合约)"; chSyncBtn.className = "ch-btn sync-ok";
+          setTimeout(() => { chSyncBtn.textContent = "🔄 同步账户"; chSyncBtn.className = "ch-btn"; }, 3000);
+          const errEl = document.getElementById("chSyncErrMsg");
+          if (errEl) errEl.style.display = "none";
+        } catch (e) {
+          chSyncBtn.textContent = "❌ 同步失败"; chSyncBtn.className = "ch-btn sync-err";
+          setTimeout(() => { chSyncBtn.textContent = "🔄 同步账户"; chSyncBtn.className = "ch-btn"; }, 4000);
+          const errEl = document.getElementById("chSyncErrMsg");
+          if (errEl) { errEl.style.display = "block"; errEl.textContent = "⚠️ 合约同步错误：" + (e.message || String(e)); }
+        }
+      }
 
       chSaveBtn.addEventListener("click", () => {
         const k = apiKeyInput.value.trim(), s = apiSecretInput.value.trim();
@@ -1533,24 +1684,54 @@
             if (hasApiKey && liveUsdtBalance !== null && liveUsdtBalance > 1) {
               const buyUsdt = +(capital * posPct / 100).toFixed(2);
               execBuyBtn.className = "trade-exec-btn exec-buy";
-              execBuyBtn.textContent = "⚡ 一键买入 " + buyUsdt.toLocaleString() + " USDT";
-              execBuyBtn.onclick = () => showOrderModal({
-                title: "确认买入 BTC",
-                rows: [
-                  ["交易对", "BTC / USDT 现货"],
-                  ["方向", "市价买入"],
-                  ["花费金额", buyUsdt.toLocaleString() + " USDT"],
-                  ["止盈目标", "$" + Math.round(targetPrice).toLocaleString()],
-                  ["止损限价", "$" + Math.round(stopPrice).toLocaleString()]
-                ],
-                confirmClass: "buy-btn",
-                execBtn: execBuyBtn,
-                ocoParams: { targetPrice, stopPrice },
-                onConfirm: () => binanceSignedPost("/api/v3/order", {
-                  symbol: "BTCUSDT", side: "BUY", type: "MARKET",
-                  quoteOrderQty: buyUsdt
-                })
-              });
+              if (futuresMode) {
+                // \u5408\u7ea6\u6a21\u5f0f\uff1a\u7528\u6740 3x \u5f00\u591a
+                const LEV     = 3;
+                const btcQty  = Math.floor(buyUsdt * LEV / price * 1000) / 1000;
+                execBuyBtn.textContent = "\u26a1 \u5408\u7ea6\u505a\u591a " + btcQty + " BTC\uff083x\uff09";
+                execBuyBtn.onclick = () => showOrderModal({
+                  title: "U\u672c\u4f4d\u5408\u7ea6\u505a\u591a",
+                  rows: [
+                    ["\u4ea4\u6613\u5bf9", "BTCUSDT \u6c38\u7eed\u5408\u7ea6"],
+                    ["\u65b9\u5411", "\u505a\u591a\uff08\u5f00\u591a\uff09"],
+                    ["\u6760\u6746", LEV + "x"],
+                    ["\u5f00\u4ed3\u91cf", btcQty + " BTC"],
+                    ["\u4fdd\u8bc1\u91d1\u7ea6", buyUsdt.toFixed(2) + " USDT"],
+                    ["\u6b62\u76c8\u89e6\u53d1", "$" + Math.round(targetPrice).toLocaleString()],
+                    ["\u6b62\u636f\u89e6\u53d1", "$" + Math.round(stopPrice).toLocaleString()]
+                  ],
+                  confirmClass: "buy-btn",
+                  execBtn: execBuyBtn,
+                  futuresTpSl: { targetPrice, stopPrice },
+                  successMsg: "\u5f00\u591a\u6210\u529f\uff01",
+                  onConfirm: async () => {
+                    await fapiPost("/fapi/v1/leverage", { symbol: "BTCUSDT", leverage: LEV });
+                    return fapiPost("/fapi/v1/order", {
+                      symbol: "BTCUSDT", side: "BUY", type: "MARKET", quantity: btcQty
+                    });
+                  }
+                });
+              } else {
+                // \u73b0\u8d27\u6a21\u5f0f
+                execBuyBtn.textContent = "\u26a1 \u4e00\u952e\u4e70\u5165 " + buyUsdt.toLocaleString() + " USDT";
+                execBuyBtn.onclick = () => showOrderModal({
+                  title: "\u786e\u8ba4\u4e70\u5165 BTC",
+                  rows: [
+                    ["\u4ea4\u6613\u5bf9", "BTC / USDT \u73b0\u8d27"],
+                    ["\u65b9\u5411", "\u5e02\u4ef7\u4e70\u5165"],
+                    ["\u82b1\u8d39\u91d1\u989d", buyUsdt.toLocaleString() + " USDT"],
+                    ["\u6b62\u76c8\u76ee\u6807", "$" + Math.round(targetPrice).toLocaleString()],
+                    ["\u6b62\u636f\u9650\u4ef7", "$" + Math.round(stopPrice).toLocaleString()]
+                  ],
+                  confirmClass: "buy-btn",
+                  execBtn: execBuyBtn,
+                  ocoParams: { targetPrice, stopPrice },
+                  onConfirm: () => binanceSignedPost("/api/v3/order", {
+                    symbol: "BTCUSDT", side: "BUY", type: "MARKET",
+                    quoteOrderQty: buyUsdt
+                  })
+                });
+              }
             } else if (!hasApiKey || liveUsdtBalance === null || liveUsdtBalance <= 1) {
               execBuyBtn.className = "trade-exec-btn exec-disabled";
               execBuyBtn.textContent = hasApiKey ? "🔒 余额不足（USDT < 1）" : "🔒 一键买入（需先同步账户）";
@@ -1651,27 +1832,31 @@
             hmStopSub.textContent   = "-" + stpPct + "% 止损";
 
             if (hasApiKey) {
-              const freeQty   = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
-              const lockedQty = +(liveBtcBalance - freeQty).toFixed(6);
+              const freeQty   = futuresMode ? liveBtcBalance : +(liveBtcFree ?? liveBtcBalance).toFixed(6);
+              const lockedQty = futuresMode ? 0 : +(liveBtcBalance - freeQty).toFixed(6);
               if (freeQty > 0.000001) {
                 execHoldSellBtn.style.display = "block";
                 execHoldSellBtn.className     = "trade-exec-btn exec-sell";
-                execHoldSellBtn.textContent   = "⚡ 卖出可用 " + freeQty + " BTC";
+                execHoldSellBtn.textContent   = futuresMode
+                  ? "⚡ 合约平仓 " + freeQty + " BTC"
+                  : "⚡ 卖出可用 " + freeQty + " BTC";
                 execHoldSellBtn.onclick = () => showOrderModal({
-                    title: "卖出可用 BTC",
-                    rows: [
-                      ["交易对", "BTC / USDT 现货"],
-                      ["方向", "市价卖出"],
-                      ["卖出数量", freeQty + " BTC (可用)"],
-                      ["当前参考价", "$" + Math.round(price).toLocaleString()]
-                    ],
+                    title: futuresMode ? "确认合约平仓" : "卖出可用 BTC",
+                    rows: futuresMode
+                      ? [["交易对", "BTCUSDT 永续合约"], ["方向", "平多（卖出）"], ["平仓量", freeQty + " BTC"], ["当前价", "$" + Math.round(price).toLocaleString()]]
+                      : [["交易对", "BTC / USDT 现货"], ["方向", "市价卖出"], ["卖出数量", freeQty + " BTC (可用)"], ["当前参考价", "$" + Math.round(price).toLocaleString()]],
                     confirmClass: "sell-btn",
                     execBtn: execHoldSellBtn,
-                    successMsg: "卖出成功！",
-                    onConfirm: () => binanceSignedPost("/api/v3/order", {
-                      symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                      quantity: freeQty
-                    })
+                    successMsg: futuresMode ? "平仓成功！" : "卖出成功！",
+                    onConfirm: futuresMode
+                      ? () => fapiPost("/fapi/v1/order", {
+                          symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                          quantity: freeQty, reduceOnly: "true"
+                        })
+                      : () => binanceSignedPost("/api/v3/order", {
+                          symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                          quantity: freeQty
+                        })
                   });
               } else {
                 execHoldSellBtn.style.display = "none";
@@ -1731,45 +1916,64 @@
             spReasonSub.textContent = sellReasons.length > 2 ? "+ " + sellReasons.slice(2).join(" · ") : "";
 
             if (hasApiKey && hasBtc) {
-              const freeQty   = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
-              const lockedQty = +(liveBtcBalance - freeQty).toFixed(6);
-              const hasOco    = lockedQty > 0.000001;
+              const freeQty   = futuresMode
+                ? liveBtcBalance
+                : +(liveBtcFree ?? liveBtcBalance).toFixed(6);
+              const lockedQty = futuresMode ? 0 : +(liveBtcBalance - freeQty).toFixed(6);
+              const hasOco    = !futuresMode && lockedQty > 0.000001;
               const sellQty   = hasOco
                 ? +liveBtcBalance.toFixed(6)
-                : +(freeQty * sellRatioPct / 100).toFixed(6);
+                : futuresMode
+                  ? +liveBtcBalance.toFixed(6)
+                  : +(freeQty * sellRatioPct / 100).toFixed(6);
               execSellBtn.className   = "trade-exec-btn exec-sell";
-              execSellBtn.textContent = hasOco
-                ? "⚡ 取消OCO+卖出 " + sellQty + " BTC"
-                : "⚡ 一键卖出 " + sellQty + " BTC (" + sellRatioPct + "%)";
+              execSellBtn.textContent = futuresMode
+                ? "⚡ 合约平多 " + sellQty + " BTC"
+                : hasOco
+                  ? "⚡ 取消OCO+卖出 " + sellQty + " BTC"
+                  : "⚡ 一键卖出 " + sellQty + " BTC (" + sellRatioPct + "%)";
               execSellBtn.onclick = () => showOrderModal({
-                title: hasOco ? "取消 OCO 并卖出" : "确认卖出 BTC",
-                rows: [
-                  ["交易对", "BTC / USDT 现货"],
-                  ["方向", "市价卖出"],
-                  ["卖出数量", sellQty + " BTC"],
-                  ["当前参考价", "$" + Math.round(price).toLocaleString()],
-                  ["主要原因", sellReasons.slice(0,2).join(" · ")]
-                ],
+                title: futuresMode ? "确认合约平多" : hasOco ? "取消 OCO 并卖出" : "确认卖出 BTC",
+                rows: futuresMode
+                  ? [
+                      ["交易对", "BTCUSDT 永续合约"],
+                      ["方向", "平多（市价）"],
+                      ["平仓量", sellQty + " BTC"],
+                      ["当前价", "$" + Math.round(price).toLocaleString()],
+                      ["主要原因", sellReasons.slice(0,2).join(" · ")]
+                    ]
+                  : [
+                      ["交易对", "BTC / USDT 现货"],
+                      ["方向", "市价卖出"],
+                      ["卖出数量", sellQty + " BTC"],
+                      ["当前参考价", "$" + Math.round(price).toLocaleString()],
+                      ["主要原因", sellReasons.slice(0,2).join(" · ")]
+                    ],
                 confirmClass: "sell-btn",
                 execBtn: execSellBtn,
-                successMsg: "卖出成功！",
-                onConfirm: hasOco
-                  ? async () => {
-                      const openOrders = await binanceSigned("/api/v3/openOrderList");
-                      const btcOrders  = openOrders.filter(o => o.symbol === "BTCUSDT" || (o.orders && o.orders[0]?.symbol === "BTCUSDT"));
-                      for (const o of btcOrders) {
-                        await binanceSignedPost("/api/v3/orderList", { symbol: "BTCUSDT", orderListId: o.orderListId }, "DELETE");
+                successMsg: futuresMode ? "平仓成功！" : "卖出成功！",
+                onConfirm: futuresMode
+                  ? () => fapiPost("/fapi/v1/order", {
+                      symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                      quantity: sellQty, reduceOnly: "true"
+                    })
+                  : hasOco
+                    ? async () => {
+                        const openOrders = await binanceSigned("/api/v3/openOrderList");
+                        const btcOrders  = openOrders.filter(o => o.symbol === "BTCUSDT" || (o.orders && o.orders[0]?.symbol === "BTCUSDT"));
+                        for (const o of btcOrders) {
+                          await binanceSignedPost("/api/v3/orderList", { symbol: "BTCUSDT", orderListId: o.orderListId }, "DELETE");
+                        }
+                        await new Promise(r => setTimeout(r, 600));
+                        return binanceSignedPost("/api/v3/order", {
+                          symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                          quantity: sellQty
+                        });
                       }
-                      await new Promise(r => setTimeout(r, 600));
-                      return binanceSignedPost("/api/v3/order", {
+                    : () => binanceSignedPost("/api/v3/order", {
                         symbol: "BTCUSDT", side: "SELL", type: "MARKET",
                         quantity: sellQty
-                      });
-                    }
-                  : () => binanceSignedPost("/api/v3/order", {
-                      symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                      quantity: sellQty
-                    })
+                      })
               });
             } else {
               execSellBtn.className = "trade-exec-btn exec-disabled";
