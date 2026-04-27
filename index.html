@@ -668,6 +668,7 @@
       let liveBtcFree         = null;  // 仅 free（卖出下单用）
       let liveFuturesPosition = null;  // { qty, entryPrice, unrealizedPnl }
       let futuresMode         = LS.get("futuresMode") ?? false;
+      let futuresHedgeMode    = false; // true = 双向持仓，需带 positionSide: "LONG"
       let _signalCache    = null;
       let _klinesCache    = null;
       let _signalThrottle = null;
@@ -869,16 +870,19 @@
               try {
                 const tpPrice = Math.round(futuresTpSl.targetPrice);
                 const slPrice = Math.round(futuresTpSl.stopPrice);
-                await fapiPost("/fapi/v1/order", {
-                  symbol: "BTCUSDT", side: "SELL", type: "TAKE_PROFIT_MARKET",
-                  stopPrice: tpPrice, closePosition: "true",
-                  timeInForce: "GTE_GTC", workingType: "MARK_PRICE"
-                });
-                await fapiPost("/fapi/v1/order", {
-                  symbol: "BTCUSDT", side: "SELL", type: "STOP_MARKET",
-                  stopPrice: slPrice, closePosition: "true",
-                  timeInForce: "GTE_GTC", workingType: "MARK_PRICE"
-                });
+                const tpBase = { symbol: "BTCUSDT", side: "SELL", type: "TAKE_PROFIT_MARKET",
+                  stopPrice: tpPrice, timeInForce: "GTE_GTC", workingType: "MARK_PRICE" };
+                const slBase = { symbol: "BTCUSDT", side: "SELL", type: "STOP_MARKET",
+                  stopPrice: slPrice, timeInForce: "GTE_GTC", workingType: "MARK_PRICE" };
+                if (futuresHedgeMode) {
+                  tpBase.positionSide = "LONG";
+                  slBase.positionSide = "LONG";
+                } else {
+                  tpBase.closePosition = "true";
+                  slBase.closePosition = "true";
+                }
+                await fapiPost("/fapi/v1/order", tpBase);
+                await fapiPost("/fapi/v1/order", slBase);
                 omBody.innerHTML += `<div style="font-size:0.8rem;color:var(--green);margin-top:4px">✅ 合约 TP/SL 已挂单！止盈 $${tpPrice.toLocaleString()} · 止损 $${slPrice.toLocaleString()}</div>
                   <div style="font-size:0.72rem;color:var(--muted)">关闭页面后订单仍有效</div>`;
               } catch(tpSlErr) {
@@ -1066,6 +1070,12 @@
       async function syncFuturesAccount() {
         chSyncBtn.textContent = "同步中..."; chSyncBtn.className = "ch-btn";
         try {
+          // 检测单向/双向持仓模式
+          try {
+            const dualRes = await fapiGet("/fapi/v1/positionSide/dual");
+            futuresHedgeMode = !!(dualRes && dualRes.dualSidePosition);
+          } catch(_) { futuresHedgeMode = false; }
+
           const balances = await fapiGet("/fapi/v2/balance");
           const usdt = balances.find(b => b.asset === "USDT");
           liveUsdtBalance = usdt ? parseFloat(usdt.availableBalance) : 0;
@@ -1806,7 +1816,8 @@
                   onConfirm: async () => {
                     await fapiPost("/fapi/v1/leverage", { symbol: "BTCUSDT", leverage: LEV });
                     return fapiPost("/fapi/v1/order", {
-                      symbol: "BTCUSDT", side: "BUY", type: "MARKET", quantity: btcQty
+                      symbol: "BTCUSDT", side: "BUY", type: "MARKET", quantity: btcQty,
+                      ...(futuresHedgeMode ? { positionSide: "LONG" } : {})
                     });
                   }
                 });
@@ -1958,7 +1969,8 @@
                     onConfirm: futuresMode
                       ? () => fapiPost("/fapi/v1/order", {
                           symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                          quantity: freeQty, reduceOnly: "true"
+                          quantity: freeQty,
+                          ...(futuresHedgeMode ? { positionSide: "LONG" } : { reduceOnly: "true" })
                         })
                       : () => binanceSignedPost("/api/v3/order", {
                           symbol: "BTCUSDT", side: "SELL", type: "MARKET",
@@ -2062,7 +2074,8 @@
                 onConfirm: futuresMode
                   ? () => fapiPost("/fapi/v1/order", {
                       symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                      quantity: sellQty, reduceOnly: "true"
+                      quantity: sellQty,
+                      ...(futuresHedgeMode ? { positionSide: "LONG" } : { reduceOnly: "true" })
                     })
                   : hasOco
                     ? async () => {
