@@ -1426,28 +1426,36 @@
             hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
             hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "）";
           } else {
-            const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time); // 升序
-            // 找最近一次卖出时间（全仓卖出的分界点）
+            const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time);
+            // 找最近一次卖出时间
             let lastSellTime = 0;
             for (const t of rawTrades) {
               if (!t.isBuyer && t.time > lastSellTime) lastSellTime = t.time;
             }
-            // 只统计「最近卖出之后」的买入记录
-            let avgCost = null, totalCost = 0, totalQty = 0;
+            // 只统计「最近卖出之后」的买入记录，精确算入手续费
+            let totalCost = 0, totalNetQty = 0;
             for (const t of rawTrades) {
-              if (!t.isBuyer) continue;
-              if (t.time <= lastSellTime) continue;
-              totalQty  += parseFloat(t.qty);
-              totalCost += parseFloat(t.quoteQty);
-              if (t.commissionAsset === "USDT") totalCost += parseFloat(t.commission);
+              if (!t.isBuyer || t.time <= lastSellTime) continue;
+              const qty  = parseFloat(t.qty);
+              const comm = parseFloat(t.commission);
+              let spent = parseFloat(t.quoteQty);
+              let netQty = qty;
+              if (t.commissionAsset === "USDT")     spent  += comm;          // USDT手续费加进成本
+              else if (t.commissionAsset === "BTC") netQty -= comm;          // BTC手续费减少实际收到的BTC
+              // BNB手续费不影响USDT成本和BTC数量，无需处理
+              totalCost   += spent;
+              totalNetQty += netQty;
             }
-            if (totalQty > 0.000001) avgCost = totalCost / totalQty;
+            const avgCost = totalNetQty > 0.000001 ? totalCost / totalNetQty : null;
             if (avgCost && avgCost > 0) {
-              const pnlPct  = (price / avgCost - 1) * 100;
-              const pnlUsdt = (price - avgCost) * liveBtcBalance;
+              // 卖出预估手续费 0.1%（默认，不用BNB折扣）
+              const SELL_FEE = 0.001;
+              const netSellPrice = price * (1 - SELL_FEE);
+              const pnlUsdt = (netSellPrice - avgCost) * liveBtcBalance;
+              const pnlPct  = (netSellPrice / avgCost - 1) * 100;
               hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
               hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价 $" + Math.round(avgCost).toLocaleString() + "）";
+              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（含买卖手续费，均价 $" + Math.round(avgCost).toLocaleString() + "）";
             } else {
               hmPnl.textContent    = "--";
               hmPnl.style.color    = "var(--text)";
@@ -1889,28 +1897,34 @@
               hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
               hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "）";
             } else {
-              const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time); // 升序
-              // 找最近一次卖出时间（全仓卖出的分界点）
+              const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time);
+              // 找最近一次卖出时间
               let lastSellTime = 0;
               for (const t of rawTrades) {
                 if (!t.isBuyer && t.time > lastSellTime) lastSellTime = t.time;
               }
-              // 只统计「最近卖出之后」的买入记录
-              let avgCost = null, totalCost = 0, totalQty = 0;
+              // 只统计「最近卖出之后」的买入记录，精确算入手续费
+              let totalCost = 0, totalNetQty = 0;
               for (const t of rawTrades) {
-                if (!t.isBuyer) continue;
-                if (t.time <= lastSellTime) continue;
-                totalQty  += parseFloat(t.qty);
-                totalCost += parseFloat(t.quoteQty);
-                if (t.commissionAsset === "USDT") totalCost += parseFloat(t.commission);
+                if (!t.isBuyer || t.time <= lastSellTime) continue;
+                const qty  = parseFloat(t.qty);
+                const comm = parseFloat(t.commission);
+                let spent = parseFloat(t.quoteQty);
+                let netQty = qty;
+                if (t.commissionAsset === "USDT")     spent  += comm;
+                else if (t.commissionAsset === "BTC") netQty -= comm;
+                totalCost   += spent;
+                totalNetQty += netQty;
               }
-              if (totalQty > 0.000001) avgCost = totalCost / totalQty;
+              const avgCost = totalNetQty > 0.000001 ? totalCost / totalNetQty : null;
               if (avgCost && avgCost > 0) {
-                const pnlPct  = (price / avgCost - 1) * 100;
-                const pnlUsdt = (price - avgCost) * liveBtcBalance;
+                const SELL_FEE = 0.001;
+                const netSellPrice = price * (1 - SELL_FEE);
+                const pnlUsdt = (netSellPrice - avgCost) * liveBtcBalance;
+                const pnlPct  = (netSellPrice / avgCost - 1) * 100;
                 hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
                 hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-                hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价 $" + Math.round(avgCost).toLocaleString() + "）";
+                hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（含买卖手续费，均价 $" + Math.round(avgCost).toLocaleString() + "）";
               } else {
                 hmPnl.textContent    = "--";
                 hmPnl.style.color    = "var(--text)";
