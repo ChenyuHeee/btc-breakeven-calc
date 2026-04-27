@@ -669,6 +669,7 @@
       let liveFuturesPosition = null;  // { qty, entryPrice, unrealizedPnl }
       let futuresMode         = LS.get("futuresMode") ?? false;
       let futuresHedgeMode    = false; // true = 双向持仓，需带 positionSide: "LONG"
+      let liveFuturesWalletBalance = null; // 合约账户钱包净值（含已用保证金）
       let _signalCache    = null;
       let _klinesCache    = null;
       let _signalThrottle = null;
@@ -1083,6 +1084,7 @@
           const balances = await fapiGet("/fapi/v2/balance");
           const usdt = balances.find(b => b.asset === "USDT");
           liveUsdtBalance = usdt ? parseFloat(usdt.availableBalance) : 0;
+          liveFuturesWalletBalance = usdt ? parseFloat(usdt.balance) : 0; // 钱包净值（含已用保证金）
 
           const positions = await fapiGet("/fapi/v2/positionRisk", { symbol: "BTCUSDT" });
           // 双向持仓模式返回 LONG + SHORT 两条，取持仓量不为0的多头
@@ -1195,9 +1197,15 @@
 
         let totalNow;
         if (liveUsdtBalance !== null) {
-          const btcVal = (liveBtcBalance && Number.isFinite(currentMarketPrice) && currentMarketPrice > 0)
-            ? liveBtcBalance * currentMarketPrice : 0;
-          totalNow = liveUsdtBalance + btcVal;
+          if (futuresMode) {
+            // 合约模式：钱包净值 + 未实现盈亏（= marginBalance）
+            const unrealized = liveFuturesPosition ? liveFuturesPosition.unrealizedPnl : 0;
+            totalNow = (liveFuturesWalletBalance || liveUsdtBalance) + unrealized;
+          } else {
+            const btcVal = (liveBtcBalance && Number.isFinite(currentMarketPrice) && currentMarketPrice > 0)
+              ? liveBtcBalance * currentMarketPrice : 0;
+            totalNow = liveUsdtBalance + btcVal;
+          }
         } else {
           totalNow = null;
         }
