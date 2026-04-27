@@ -1267,29 +1267,9 @@
           }
         }
 
-        // ── 卖出建议：当前参考价 ──
+        // ── 卖出建议：只更新参考价文字，onclick 由 calcAndRenderSignal 管理 ──
         if (c.sellScore >= 4 && sellPlan.style.display !== "none") {
           spPrice.textContent = "$" + Math.round(price).toLocaleString();
-          if (hasApiKey && hasBtc && execSellBtn.className.includes("exec-sell")) {
-            const sellQty = +((liveBtcFree ?? liveBtcBalance) * c.sellRatioPct / 100).toFixed(6);
-            execSellBtn.onclick = () => showOrderModal({
-              title: "确认卖出 BTC",
-              rows: [
-                ["交易对", "BTC / USDT 现货"],
-                ["方向", "市价卖出"],
-                ["卖出数量", sellQty + " BTC"],
-                ["当前参考价", "$" + Math.round(price).toLocaleString()],
-                ["主要原因", c.sellReasons.slice(0,2).join(" · ")]
-              ],
-              confirmClass: "sell-btn",
-              execBtn: execSellBtn,
-              successMsg: "卖出成功！",
-              onConfirm: () => binanceSignedPost("/api/v3/order", {
-                symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                quantity: sellQty
-              })
-            });
-          }
         }
       }
 
@@ -1750,11 +1730,19 @@
             spReason.textContent    = sellReasons.slice(0, 2).join(" · ");
             spReasonSub.textContent = sellReasons.length > 2 ? "+ " + sellReasons.slice(2).join(" · ") : "";
 
-            if (hasApiKey && hasBtc && execSellBtn.className.includes("exec-sell")) {
-              const sellQty = +((liveBtcFree ?? liveBtcBalance) * sellRatioPct / 100).toFixed(6);
-              execSellBtn.textContent = "⚡ 一键卖出 " + sellQty + " BTC (" + sellRatioPct + "%)";
+            if (hasApiKey && hasBtc) {
+              const freeQty   = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
+              const lockedQty = +(liveBtcBalance - freeQty).toFixed(6);
+              const hasOco    = lockedQty > 0.000001;
+              const sellQty   = hasOco
+                ? +liveBtcBalance.toFixed(6)
+                : +(freeQty * sellRatioPct / 100).toFixed(6);
+              execSellBtn.className   = "trade-exec-btn exec-sell";
+              execSellBtn.textContent = hasOco
+                ? "⚡ 取消OCO+卖出 " + sellQty + " BTC"
+                : "⚡ 一键卖出 " + sellQty + " BTC (" + sellRatioPct + "%)";
               execSellBtn.onclick = () => showOrderModal({
-                title: "确认卖出 BTC",
+                title: hasOco ? "取消 OCO 并卖出" : "确认卖出 BTC",
                 rows: [
                   ["交易对", "BTC / USDT 现货"],
                   ["方向", "市价卖出"],
@@ -1765,16 +1753,27 @@
                 confirmClass: "sell-btn",
                 execBtn: execSellBtn,
                 successMsg: "卖出成功！",
-                onConfirm: () => binanceSignedPost("/api/v3/order", {
-                  symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                  quantity: sellQty
-                })
+                onConfirm: hasOco
+                  ? async () => {
+                      const openOrders = await binanceSigned("/api/v3/openOrderList");
+                      const btcOrders  = openOrders.filter(o => o.symbol === "BTCUSDT" || (o.orders && o.orders[0]?.symbol === "BTCUSDT"));
+                      for (const o of btcOrders) {
+                        await binanceSignedPost("/api/v3/orderList", { symbol: "BTCUSDT", orderListId: o.orderListId }, "DELETE");
+                      }
+                      await new Promise(r => setTimeout(r, 600));
+                      return binanceSignedPost("/api/v3/order", {
+                        symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                        quantity: sellQty
+                      });
+                    }
+                  : () => binanceSignedPost("/api/v3/order", {
+                      symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                      quantity: sellQty
+                    })
               });
-            } else if (hasApiKey && hasBtc && !execSellBtn.className.includes("exec-sell")) {
-              // 保持禁用状态
             } else {
               execSellBtn.className = "trade-exec-btn exec-disabled";
-              execSellBtn.textContent = hasApiKey ? "🔒 卖出（需同步账户查看 BTC 余额）" : "🔒 一键卖出（需先同步账户）";
+              execSellBtn.textContent = hasApiKey ? "\ud83d\udd12 \u5356\u51fa\uff08\u9700\u540c\u6b65\u8d26\u6237\u67e5\u770b BTC \u4f59\u989d\uff09" : "\ud83d\udd12 \u4e00\u952e\u5356\u51fa\uff08\u9700\u5148\u540c\u6b65\u8d26\u6237\uff09";
               execSellBtn.onclick = null;
             }
           } else {
