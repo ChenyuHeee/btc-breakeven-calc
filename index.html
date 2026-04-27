@@ -1550,8 +1550,9 @@
             tpStop.style.color = "var(--red)";
             tpStopSub.textContent = "-" + effectiveStopPct + "% 止损";
 
-            if (hasApiKey && liveUsdtBalance !== null && liveUsdtBalance > 1 && execBuyBtn.className.includes("exec-buy")) {
+            if (hasApiKey && liveUsdtBalance !== null && liveUsdtBalance > 1) {
               const buyUsdt = +(capital * posPct / 100).toFixed(2);
+              execBuyBtn.className = "trade-exec-btn exec-buy";
               execBuyBtn.textContent = "⚡ 一键买入 " + buyUsdt.toLocaleString() + " USDT";
               execBuyBtn.onclick = () => showOrderModal({
                 title: "确认买入 BTC",
@@ -1571,11 +1572,9 @@
                 })
               });
             } else if (!hasApiKey || liveUsdtBalance === null || liveUsdtBalance <= 1) {
-              if (!execBuyBtn.className.includes("exec-disabled")) {
-                execBuyBtn.className = "trade-exec-btn exec-disabled";
-                execBuyBtn.textContent = hasApiKey ? "🔒 余额不足（USDT < 1）" : "🔒 一键买入（需先同步账户）";
-                execBuyBtn.onclick = null;
-              }
+              execBuyBtn.className = "trade-exec-btn exec-disabled";
+              execBuyBtn.textContent = hasApiKey ? "🔒 余额不足（USDT < 1）" : "🔒 一键买入（需先同步账户）";
+              execBuyBtn.onclick = null;
             }
           } else {
             tradePlan.style.display = "none";
@@ -1676,9 +1675,9 @@
               const lockedQty = +(liveBtcBalance - freeQty).toFixed(6);
               if (freeQty > 0.000001) {
                 execHoldSellBtn.style.display = "block";
+                execHoldSellBtn.className     = "trade-exec-btn exec-sell";
                 execHoldSellBtn.textContent   = "⚡ 卖出可用 " + freeQty + " BTC";
-                if (execHoldSellBtn.className.includes("exec-sell")) {
-                  execHoldSellBtn.onclick = () => showOrderModal({
+                execHoldSellBtn.onclick = () => showOrderModal({
                     title: "卖出可用 BTC",
                     rows: [
                       ["交易对", "BTC / USDT 现货"],
@@ -1694,15 +1693,14 @@
                       quantity: freeQty
                     })
                   });
-                }
               } else {
                 execHoldSellBtn.style.display = "none";
               }
               if (lockedQty > 0.000001) {
                 execHoldSellAllBtn.style.display = "block";
+                execHoldSellAllBtn.className     = "trade-exec-btn exec-sell";
                 execHoldSellAllBtn.textContent   = "⚡ 取消OCO+全卖";
-                if (execHoldSellAllBtn.className.includes("exec-sell")) {
-                  execHoldSellAllBtn.onclick = () => showOrderModal({
+                execHoldSellAllBtn.onclick = () => showOrderModal({
                     title: "取消 OCO 并全部卖出",
                     rows: [
                       ["交易对", "BTC / USDT 现货"],
@@ -1727,7 +1725,6 @@
                       });
                     }
                   });
-                }
               } else {
                 execHoldSellAllBtn.style.display = "none";
               }
