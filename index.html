@@ -462,9 +462,10 @@
           </div>
         </div>
         <div class="signal-note" id="signalNote"></div>
-        <div style="display:flex;align-items:center;gap:6px;margin:7px 0 4px">
+        <div style="display:flex;align-items:center;gap:6px;margin:7px 0 4px;flex-wrap:wrap">
           <span style="font-size:0.75rem;color:var(--muted)">交易模式：</span>
           <button id="modeToggleBtn" style="font-size:0.75rem;padding:3px 10px;border-radius:20px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-weight:600">现货</button>
+          <button id="transferBtn" style="display:none;font-size:0.75rem;padding:3px 10px;border-radius:20px;border:1.5px solid var(--muted);background:transparent;color:var(--muted);cursor:pointer">⇄ 划转到合约</button>
         </div>
         <div class="trade-plan" id="tradePlan">
           <div class="trade-plan-title">📋 买入建议</div>
@@ -774,12 +775,14 @@
 
       // 切换模式按钮
       const modeToggleBtn = document.getElementById("modeToggleBtn");
+      const transferBtn   = document.getElementById("transferBtn");
       function applyModeToggleUI() {
         if (modeToggleBtn) {
           modeToggleBtn.textContent = futuresMode ? "合约 3x" : "现货";
           modeToggleBtn.style.background    = futuresMode ? "var(--accent)" : "transparent";
           modeToggleBtn.style.color         = futuresMode ? "#fff" : "var(--accent)";
         }
+        if (transferBtn) transferBtn.style.display = futuresMode ? "inline-block" : "none";
       }
       applyModeToggleUI();
       if (modeToggleBtn) {
@@ -790,6 +793,44 @@
           // 重置持仓数据，让 calcAndRenderSignal 重新渲染
           liveUsdtBalance = null; liveBtcBalance = null; liveBtcFree = null; liveFuturesPosition = null;
           if (_klinesCache) calcAndRenderSignal(currentMarketPrice || 0);
+        });
+      }
+      if (transferBtn) {
+        transferBtn.addEventListener("click", async () => {
+          const hasApiKey = !!(LS.get("apiKey") || "").trim() && !!(LS.get("apiSecret") || "").trim();
+          if (!hasApiKey) { alert("请先在设置中填写 API Key 并同步账户"); return; }
+          // 读取现货余额（如果还没同步就用已有值）
+          let spotUsdt = null;
+          try {
+            const account = await binanceSigned("/api/v3/account");
+            const bals = account.balances || [];
+            spotUsdt = parseFloat(bals.find(b => b.asset === "USDT")?.free || 0);
+          } catch(e) {
+            alert("读取现货余额失败：" + e.message); return;
+          }
+          if (spotUsdt < 1) { alert("现货钱包 USDT 余额不足（" + spotUsdt.toFixed(2) + " USDT）"); return; }
+          const input = prompt(
+            "现货钱包可用：" + spotUsdt.toFixed(2) + " USDT\n\n输入要划转到合约钱包的金额（USDT）：",
+            Math.floor(spotUsdt).toString()
+          );
+          if (!input) return;
+          const amount = parseFloat(input);
+          if (isNaN(amount) || amount <= 0) { alert("金额无效"); return; }
+          if (amount > spotUsdt) { alert("超过可用余额 " + spotUsdt.toFixed(2) + " USDT"); return; }
+          try {
+            transferBtn.textContent = "划转中...";
+            transferBtn.disabled = true;
+            await binanceSignedPost("/sapi/v1/asset/transfer", {
+              type: "MAIN_UMFUTURE", asset: "USDT", amount: amount.toFixed(2)
+            });
+            transferBtn.textContent = "✅ 划转成功";
+            setTimeout(() => { transferBtn.textContent = "⇄ 划转到合约"; transferBtn.disabled = false; }, 3000);
+            // 自动重新同步合约账户
+            await syncFuturesAccount();
+          } catch(e) {
+            alert("划转失败：" + e.message);
+            transferBtn.textContent = "⇄ 划转到合约"; transferBtn.disabled = false;
+          }
         });
       }
 
