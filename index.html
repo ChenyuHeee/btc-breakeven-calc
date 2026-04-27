@@ -661,6 +661,8 @@
       let liveBtcBalance  = null;  // free + locked（持仓显示用）
       let liveBtcFree     = null;  // 仅 free（卖出下单用）
       let _signalCache    = null;
+      let _klinesCache    = null;
+      let _signalThrottle = null;
 
       // Restore API keys & settings
       apiKeyInput.value    = LS.get("apiKey")    || "";
@@ -1291,29 +1293,14 @@
         }
       }
 
-      async function fetchSignal() {
-        signalTitle.textContent = "分析中...";
-        signalSub.textContent   = "正在获取多周期数据";
-        signalCardEl.className  = "signal-card";
-        try {
-          // 同时拿 1h (100根) + 4h (60根) + 24h ticker
-          const sigProxy = (LS.get("proxy") || "").trim().replace(/\/$/, "");
-          const sigBase  = sigProxy || BINANCE_API;
-          const [kl1hRes, kl4hRes, tkRes] = await Promise.all([
-            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
-            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=60"),
-            fetch(sigBase + "/api/v3/ticker/24hr?symbol=BTCUSDT")
-          ]);
-          const klines1h = await kl1hRes.json();
-          const klines4h = await kl4hRes.json();
-          const ticker   = await tkRes.json();
-
-          // ── 基础数据 ──
-          const closes1h = klines1h.map(k => parseFloat(k[4]));
-          const closes4h = klines4h.map(k => parseFloat(k[4]));
-          const vols1h   = klines1h.map(k => parseFloat(k[5]));
-          const price    = closes1h[closes1h.length - 1];
-          const chgPct   = parseFloat(ticker.priceChangePercent);
+      // 用缓存的 K 线数据 + 实时价格重算所有指标并渲染
+      function calcAndRenderSignal(livePrice) {
+        if (!_klinesCache) return;
+        const closes1h = [..._klinesCache.closes1h_base, livePrice];
+        const closes4h = [..._klinesCache.closes4h_base, livePrice];
+        const vols1h   = _klinesCache.vols1h;
+        const chgPct   = _klinesCache.chgPct;
+        const price    = livePrice;
 
           // ── 计算指标 ──
           const rsi1h  = calcRSI(closes1h, 14);
@@ -1325,7 +1312,7 @@
           const ema21  = calcEMA(closes1h, 21);
           const maDiff = ma20 ? ((price - ma20) / ma20 * 100) : 0;
 
-          // 成交量：当前 vs 过去20根均量
+          // 成交量：当前 vs 过20根均量
           const volAvg = vols1h.slice(-21, -1).reduce((a, b) => a + b, 0) / 20;
           const volCur = vols1h[vols1h.length - 1];
           const volRatio = volAvg > 0 ? volCur / volAvg : 1;
@@ -1390,7 +1377,7 @@
 
           // 成交量
           if (indVolVal) {
-            const isGreen = price >= parseFloat(klines1h[klines1h.length - 1][1]); // close >= open
+            const isGreen = price >= _klinesCache.lastOpen1h;
             const volLabel = volRatio > 2   ? (isGreen ? "放量上涨 ✓" : "放量下跌 ✗")
                            : volRatio > 1.3 ? (isGreen ? "量能偏大↑" : "量能偏大↓")
                            : volRatio > 0.7 ? "量能正常"
@@ -1419,10 +1406,7 @@
           const rsiBothOversold  = rsi1h < 40 && rsi4h < 45;
           const rsiBothOverbought= rsi1h > 65 && rsi4h > 60;
 
-          // 自动判断市场状态
-          // 严格路径：双周期 RSI 确认 + 价格站上均线
           const trendByRsi  = rsi1h > 52 && rsi4h > 50 && maDiff > 0.5;
-          // 动能路径：MACD 多头 + EMA 金叉 + RSI 站上 48（即使 RSI 没超过 52）
           const emaCrossUp  = ema9 != null && ema21 != null ? ema9 > ema21 : false;
           const macdBull    = macd ? macd.histogram > 0 : false;
           const trendByMomentum = macdBull && emaCrossUp && rsi1h >= 48 && maDiff > 0;
@@ -1430,40 +1414,35 @@
           const effectiveMode = isTrending ? 'trend' : 'dip';
 
           if (effectiveMode === 'dip') {
-            // 低吸模式：只有价格真正处于低位才给正分
-            // MACD 在低吸模式中只作为"止跌确认"，不独立产生买入信号
-            if      (rsiBothOversold)      score += 4;  // 1h+4h 双重超卖，强信号
+            if      (rsiBothOversold)      score += 4;
             else if (rsi1h < 30)           score += 3;
             else if (rsi1h < 40)           score += 2;
             else if (rsi1h < 50)           score += 1;
-            // RSI ≥ 50 在低吸模式下说明没有低位信号，MACD 看多也是追高，减分
             else if (rsiBothOverbought)    score -= 4;
             else if (rsi1h > 70)           score -= 3;
             else if (rsi1h > 60)           score -= 2;
-            else /* rsi1h 50~60 */         score -= 1;  // 价格不低，不适合低吸
+            else                           score -= 1;
             if      (maDiff < -2)          score += 2;
             else if (maDiff < 0)           score += 1;
             else if (maDiff > 3)           score -= 2;
             else if (maDiff > 1.5)         score -= 1;
-            // 布林带低位加分
-            if      (bollPct < 15)         score += 3;  // 非常接近下轨
+            if      (bollPct < 15)         score += 3;
             else if (bollPct < 30)         score += 2;
-            else if (bollPct > 85)         score -= 2;  // 接近上轨，不宜追
+            else if (bollPct > 85)         score -= 2;
             if      (chgPct < -5)          score += 2;
             else if (chgPct < -2)          score += 1;
             else if (chgPct > 5)           score -= 2;
             else if (chgPct > 3)           score -= 1;
           } else {
-            if      (rsi1h > 50 && rsi4h > 50 && rsi1h <= 70) score += 3; // 双周期确认上涨
+            if      (rsi1h > 50 && rsi4h > 50 && rsi1h <= 70) score += 3;
             else if (rsi1h > 50 && rsi1h <= 70) score += 2;
             else if (rsi1h > 70 && rsi1h <= 80) score += 1;
             else if (rsi1h > 80)           score -= 2;
             else if (rsi1h < 45)           score -= 2;
-            // 布林带趋势确认
-            if      (bollPct > 50 && bollPct < 80)  score += 2; // 站上中轨，趋势确立
-            else if (bollPct >= 80 && bollPct < 90)  score += 1; // 强势但接近上轨
-            else if (bollPct >= 90)                  score -= 1; // 可能过热
-            else if (bollPct < 40)                   score -= 1; // 还在中下方
+            if      (bollPct > 50 && bollPct < 80)  score += 2;
+            else if (bollPct >= 80 && bollPct < 90)  score += 1;
+            else if (bollPct >= 90)                  score -= 1;
+            else if (bollPct < 40)                   score -= 1;
             if      (maDiff > 0.5 && maDiff < 5)    score += 2;
             else if (maDiff >= 5 && maDiff < 10)    score += 1;
             else if (maDiff >= 10)                   score -= 2;
@@ -1474,13 +1453,12 @@
             else if (chgPct < 0)   score -= 1;
           }
 
-          // 成交量修正（放量信号更可信，缩量减半）
-          const isGreenCandle = price >= parseFloat(klines1h[klines1h.length - 1][1]);
+          const isGreenCandle = price >= _klinesCache.lastOpen1h;
           if (volRatio > 1.5) {
-            if (score > 0 &&  isGreenCandle) score += 1; // 放量上涨，加强做多信号
-            if (score > 0 && !isGreenCandle) score -= 1; // 放量下跌，减弱做多信号
+            if (score > 0 &&  isGreenCandle) score += 1;
+            if (score > 0 && !isGreenCandle) score -= 1;
           } else if (volRatio < 0.6) {
-            score = Math.round(score * 0.7); // 缩量，信号可信度降低
+            score = Math.round(score * 0.7);
           }
 
           // ── 生成信号文字 ──
@@ -1527,30 +1505,23 @@
             "（数据：Binance 1h+4h K线，仅供参考，不构成投资建议）";
 
           // ── 交易建议 ──
-          // 可用资金：优先用 Binance 同步的实际 USDT 余额，降级用设置中的起始资金
           const capital    = liveUsdtBalance !== null ? liveUsdtBalance : (chStartVal || 0);
           const stopPct    = chStopPct || 15;
           const isBuySignal = lv[4] === "sig-buy";
-
-          // ── 更新一键下单按钮 ──
           const hasApiKey = !!(LS.get("apiKey") || "").trim();
 
           if (isBuySignal) {
             tradePlan.style.display = "block";
 
-            // 仓位比例：根据 score
             const posPct = score >= 5 ? 30 : score >= 3 ? 20 : 10;
             tpPosition.textContent = posPct + "%";
             tpPosition.style.color = "var(--green)";
             if (capital > 0) {
-              const posUsdt = (capital * posPct / 100).toFixed(0);
-              tpPositionSub.textContent = "≈ " + posUsdt + " USDT";
+              tpPositionSub.textContent = "≈ " + (capital * posPct / 100).toFixed(0) + " USDT";
             } else {
               tpPositionSub.textContent = "（在设置中填入起始资金可计算金额）";
             }
 
-            // 杠杆：强信号趋势可上 3x，其余保守
-            // 布林带带宽衡量波动：宽 = 高波动 = 降杠杆
             const bollWidth = boll ? (boll.upper - boll.lower) / boll.mid * 100 : 5;
             let lev = 1;
             if      (score >= 5 && isTrending && bollWidth < 8)  lev = 3;
@@ -1561,10 +1532,8 @@
             tpLeverage.style.color = lev >= 3 ? "var(--red)" : lev === 2 ? "#c26a27" : "var(--green)";
             tpLeverageSub.textContent = lev === 1 ? "现货，无爆仓风险" : lev === 2 ? "轻杠杆，控制好止损" : "高杠杆，严格止损";
 
-            // 目标卖出价：低吸模式用布林上轨，趋势模式用 +涨幅
             let targetPct;
             if (effectiveMode === 'dip') {
-              // 目标：boll 上轨，或至少 +5%
               const bollTargetPct = boll ? (boll.upper - price) / price * 100 : 0;
               targetPct = Math.max(5, Math.min(20, bollTargetPct));
             } else {
@@ -1575,17 +1544,14 @@
             tpTarget.style.color = "var(--green)";
             tpTargetSub.textContent = "+" + targetPct.toFixed(1) + "% 目标";
 
-            // 止损价：基于设置的止损比例，杠杆越高止损越紧
             const effectiveStopPct = lev > 1 ? Math.min(stopPct, Math.floor(80 / lev)) : stopPct;
             const stopPrice = price * (1 - effectiveStopPct / 100);
             tpStop.textContent = "$" + Math.round(stopPrice).toLocaleString();
             tpStop.style.color = "var(--red)";
             tpStopSub.textContent = "-" + effectiveStopPct + "% 止损";
 
-            // 买入按钮
-            if (hasApiKey && liveUsdtBalance !== null && liveUsdtBalance > 1) {
+            if (hasApiKey && liveUsdtBalance !== null && liveUsdtBalance > 1 && execBuyBtn.className.includes("exec-buy")) {
               const buyUsdt = +(capital * posPct / 100).toFixed(2);
-              execBuyBtn.className = "trade-exec-btn exec-buy";
               execBuyBtn.textContent = "⚡ 一键买入 " + buyUsdt.toLocaleString() + " USDT";
               execBuyBtn.onclick = () => showOrderModal({
                 title: "确认买入 BTC",
@@ -1604,10 +1570,12 @@
                   quoteOrderQty: buyUsdt
                 })
               });
-            } else {
-              execBuyBtn.className = "trade-exec-btn exec-disabled";
-              execBuyBtn.textContent = hasApiKey ? "🔒 余额不足（USDT < 1）" : "🔒 一键买入（需先同步账户）";
-              execBuyBtn.onclick = null;
+            } else if (!hasApiKey || liveUsdtBalance === null || liveUsdtBalance <= 1) {
+              if (!execBuyBtn.className.includes("exec-disabled")) {
+                execBuyBtn.className = "trade-exec-btn exec-disabled";
+                execBuyBtn.textContent = hasApiKey ? "🔒 余额不足（USDT < 1）" : "🔒 一键买入（需先同步账户）";
+                execBuyBtn.onclick = null;
+              }
             }
           } else {
             tradePlan.style.display = "none";
@@ -1617,11 +1585,9 @@
           }
 
           // ── 卖出信号评分 ──
-          // 独立于买入评分，专门衡量超买过热时卖出语义
           let sellScore = 0;
           const sellReasons = [];
 
-          // RSI 超买
           if      (rsi1h > 80)        { sellScore += 4; sellReasons.push("RSI 1h " + rsi1h.toFixed(0) + " 极度超买"); }
           else if (rsi1h > 70)        { sellScore += 3; sellReasons.push("RSI 1h " + rsi1h.toFixed(0) + " 超买"); }
           else if (rsi1h > 65)        { sellScore += 1; sellReasons.push("RSI 1h 偏高"); }
@@ -1629,28 +1595,20 @@
             if      (rsi4h > 75)      { sellScore += 3; sellReasons.push("RSI 4h " + rsi4h.toFixed(0) + " 超买"); }
             else if (rsi4h > 65)      { sellScore += 2; sellReasons.push("RSI 4h 偏高"); }
           }
-
-          // 布林带过热
           if      (bollPct > 95)      { sellScore += 4; sellReasons.push("突破布林上轨"); }
           else if (bollPct > 85)      { sellScore += 2; sellReasons.push("布林带上轨区"); }
           else if (bollPct > 75)      { sellScore += 1; sellReasons.push("布林带偏高"); }
-
-          // MACD 死叉 or 空头加速
           if (macd) {
             if (macd.prevHist > 0 && macd.histogram < 0) { sellScore += 4; sellReasons.push("MACD 死叉"); }
             else if (!macdBull && macd.histogram < macd.prevHist) { sellScore += 2; sellReasons.push("MACD 空头加速"); }
             else if (!macdBull)                                    { sellScore += 1; }
           }
-
-          // 24h 涨幅过大（短期过热）
-          if      (chgPct > 15)       { sellScore += 3; sellReasons.push("24h 涨超 15%，短线过热"); }
+          if      (chgPct > 15)       { sellScore += 3; sellReasons.push("24h 涨趀15%，短线过热"); }
           else if (chgPct > 8)        { sellScore += 2; sellReasons.push("24h 大涨 " + chgPct.toFixed(1) + "%"); }
           else if (chgPct > 5)        { sellScore += 1; }
-
-          // EMA 死叉
           if (!emaCrossUp && ema9 && ema21) { sellScore += 2; sellReasons.push("EMA 死叉"); }
 
-          // ── 缓存信号参数供 WS 实时刷新使用 ──
+          // ── 缓存信号参数 ──
           const sellRatioPct = sellScore >= 8 ? 100 : sellScore >= 6 ? 50 : 30;
           _signalCache = {
             isBuySignal, effectiveMode, score, isTrending,
@@ -1669,37 +1627,30 @@
             hmBtc.textContent    = liveBtcBalance.toFixed(6) + " BTC";
             hmBtcSub.textContent = "≈ $" + Math.round(btcNow).toLocaleString();
 
-            // 平均成本（含手续费）：从最新买入记录往回凑，直到累计数量 >= 当前持仓
             const recentTrades = (window._lastTrades || []).slice().sort((a, b) => b.time - a.time);
             let avgCost = null;
             if (recentTrades.length > 0) {
-              let needed    = liveBtcBalance;   // 还需要匹配的 BTC 数量
-              let totalCost = 0;                // 总成本（含手续费折算 USDT）
-              let matched   = 0;                // 已匹配的 BTC 数量
+              let needed    = liveBtcBalance;
+              let totalCost = 0;
+              let matched   = 0;
               for (const t of recentTrades) {
                 if (needed <= 0.000001) break;
-                if (!t.isBuyer) continue;       // 跳过卖出记录
+                if (!t.isBuyer) continue;
                 const qty   = parseFloat(t.qty);
-                const take  = Math.min(qty, needed);  // 这笔只取需要的部分
+                const take  = Math.min(qty, needed);
                 const ratio = take / qty;
-                // 买入成本 = quoteQty（实际花费 USDT）
                 const quoteQty = parseFloat(t.quoteQty);
                 let   feeCost  = 0;
-                // 手续费换算为 USDT
                 if (t.commissionAsset === "USDT") {
                   feeCost = parseFloat(t.commission) * ratio;
                 } else if (t.commissionAsset === "BTC") {
-                  // BTC 手续费按成交价折算
                   feeCost = parseFloat(t.commission) * parseFloat(t.price) * ratio;
                 }
-                // BNB 手续费忽略（金额极小，约 0.075%，不影响展示）
                 totalCost += quoteQty * ratio + feeCost;
                 matched   += take;
                 needed    -= take;
               }
-              if (matched > 0.000001) {
-                avgCost = totalCost / matched;
-              }
+              if (matched > 0.000001) avgCost = totalCost / matched;
             }
             if (avgCost && avgCost > 0) {
               const pnlPct  = (price / avgCost - 1) * 100;
@@ -1713,7 +1664,6 @@
               hmPnlSub.textContent = "同步账户后可显示实际盈亏";
             }
 
-            // 止盈/止损参考价：基于布林带 + RSI + 设置的止损比例
             const tgtPct = boll ? Math.max(4, Math.min(20, (boll.upper - price) / price * 100)) : 8;
             const stpPct = chStopPct || 15;
             hmTarget.textContent    = "$" + Math.round(price * (1 + tgtPct / 100)).toLocaleString();
@@ -1721,65 +1671,63 @@
             hmStop.textContent      = "$" + Math.round(price * (1 - stpPct / 100)).toLocaleString();
             hmStopSub.textContent   = "-" + stpPct + "% 止损";
 
-            // 卖出可用 BTC 按钮（free 部分）
             if (hasApiKey) {
               const freeQty   = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
               const lockedQty = +(liveBtcBalance - freeQty).toFixed(6);
               if (freeQty > 0.000001) {
                 execHoldSellBtn.style.display = "block";
                 execHoldSellBtn.textContent   = "⚡ 卖出可用 " + freeQty + " BTC";
-                execHoldSellBtn.onclick = () => showOrderModal({
-                  title: "卖出可用 BTC",
-                  rows: [
-                    ["交易对", "BTC / USDT 现货"],
-                    ["方向", "市价卖出"],
-                    ["卖出数量", freeQty + " BTC (可用)"],
-                    ["当前参考价", "$" + Math.round(price).toLocaleString()]
-                  ],
-                  confirmClass: "sell-btn",
-                  execBtn: execHoldSellBtn,
-                  successMsg: "卖出成功！",
-                  onConfirm: () => binanceSignedPost("/api/v3/order", {
-                    symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                    quantity: freeQty
-                  })
-                });
+                if (execHoldSellBtn.className.includes("exec-sell")) {
+                  execHoldSellBtn.onclick = () => showOrderModal({
+                    title: "卖出可用 BTC",
+                    rows: [
+                      ["交易对", "BTC / USDT 现货"],
+                      ["方向", "市价卖出"],
+                      ["卖出数量", freeQty + " BTC (可用)"],
+                      ["当前参考价", "$" + Math.round(price).toLocaleString()]
+                    ],
+                    confirmClass: "sell-btn",
+                    execBtn: execHoldSellBtn,
+                    successMsg: "卖出成功！",
+                    onConfirm: () => binanceSignedPost("/api/v3/order", {
+                      symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                      quantity: freeQty
+                    })
+                  });
+                }
               } else {
                 execHoldSellBtn.style.display = "none";
               }
-              // 取消 OCO + 全卖 按钮
               if (lockedQty > 0.000001) {
                 execHoldSellAllBtn.style.display = "block";
                 execHoldSellAllBtn.textContent   = "⚡ 取消OCO+全卖";
-                execHoldSellAllBtn.onclick = () => showOrderModal({
-                  title: "取消 OCO 并全部卖出",
-                  rows: [
-                    ["交易对", "BTC / USDT 现货"],
-                    ["步骤 1", "查询并取消未成交 OCO 单"],
-                    ["步骤 2", "市价卖出全部 BTC"],
-                    ["预计数量", liveBtcBalance.toFixed(6) + " BTC"],
-                    ["当前参考价", "$" + Math.round(price).toLocaleString()]
-                  ],
-                  confirmClass: "sell-btn",
-                  execBtn: execHoldSellAllBtn,
-                  successMsg: "全部卖出成功！",
-                  onConfirm: async () => {
-                    // 1. 查询未成交 OCO 单
-                    const openOrders = await binanceSigned("/api/v3/openOrderList");
-                    const btcOrders  = openOrders.filter(o => o.symbol === "BTCUSDT" || (o.orders && o.orders[0]?.symbol === "BTCUSDT"));
-                    // 2. 依次取消
-                    for (const o of btcOrders) {
-                      await binanceSignedPost("/api/v3/orderList", { symbol: "BTCUSDT", orderListId: o.orderListId }, "DELETE");
+                if (execHoldSellAllBtn.className.includes("exec-sell")) {
+                  execHoldSellAllBtn.onclick = () => showOrderModal({
+                    title: "取消 OCO 并全部卖出",
+                    rows: [
+                      ["交易对", "BTC / USDT 现货"],
+                      ["步骤 1", "查询并取消未成交 OCO 单"],
+                      ["步骤 2", "市价卖出全部 BTC"],
+                      ["预计数量", liveBtcBalance.toFixed(6) + " BTC"],
+                      ["当前参考价", "$" + Math.round(price).toLocaleString()]
+                    ],
+                    confirmClass: "sell-btn",
+                    execBtn: execHoldSellAllBtn,
+                    successMsg: "全部卖出成功！",
+                    onConfirm: async () => {
+                      const openOrders = await binanceSigned("/api/v3/openOrderList");
+                      const btcOrders  = openOrders.filter(o => o.symbol === "BTCUSDT" || (o.orders && o.orders[0]?.symbol === "BTCUSDT"));
+                      for (const o of btcOrders) {
+                        await binanceSignedPost("/api/v3/orderList", { symbol: "BTCUSDT", orderListId: o.orderListId }, "DELETE");
+                      }
+                      await new Promise(r => setTimeout(r, 600));
+                      return binanceSignedPost("/api/v3/order", {
+                        symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                        quantity: +liveBtcBalance.toFixed(6)
+                      });
                     }
-                    // 3. 市价卖出全部（稍延确保解锁）
-                    await new Promise(r => setTimeout(r, 600));
-                    const totalQty = +(liveBtcBalance).toFixed(6);
-                    return binanceSignedPost("/api/v3/order", {
-                      symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                      quantity: totalQty
-                    });
-                  }
-                });
+                  });
+                }
               } else {
                 execHoldSellAllBtn.style.display = "none";
               }
@@ -1805,10 +1753,8 @@
             spReason.textContent    = sellReasons.slice(0, 2).join(" · ");
             spReasonSub.textContent = sellReasons.length > 2 ? "+ " + sellReasons.slice(2).join(" · ") : "";
 
-            // 卖出按钮
-            if (hasApiKey && hasBtc) {
+            if (hasApiKey && hasBtc && execSellBtn.className.includes("exec-sell")) {
               const sellQty = +((liveBtcFree ?? liveBtcBalance) * sellRatioPct / 100).toFixed(6);
-              execSellBtn.className = "trade-exec-btn exec-sell";
               execSellBtn.textContent = "⚡ 一键卖出 " + sellQty + " BTC (" + sellRatioPct + "%)";
               execSellBtn.onclick = () => showOrderModal({
                 title: "确认卖出 BTC",
@@ -1827,6 +1773,8 @@
                   quantity: sellQty
                 })
               });
+            } else if (hasApiKey && hasBtc && !execSellBtn.className.includes("exec-sell")) {
+              // 保持禁用状态
             } else {
               execSellBtn.className = "trade-exec-btn exec-disabled";
               execSellBtn.textContent = hasApiKey ? "🔒 卖出（需同步账户查看 BTC 余额）" : "🔒 一键卖出（需先同步账户）";
@@ -1838,6 +1786,38 @@
             execSellBtn.textContent = "🔒 一键卖出（需信号触发）";
             execSellBtn.onclick = null;
           }
+      }
+
+      async function fetchSignal() {
+        signalTitle.textContent = "分析中...";
+        signalSub.textContent   = "正在获取多周期数据";
+        signalCardEl.className  = "signal-card";
+        try {
+          // 同时拿 1h (100根) + 4h (60根) + 24h ticker
+          const sigProxy = (LS.get("proxy") || "").trim().replace(/\/$/, "");
+          const sigBase  = sigProxy || BINANCE_API;
+          const [kl1hRes, kl4hRes, tkRes] = await Promise.all([
+            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
+            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=60"),
+            fetch(sigBase + "/api/v3/ticker/24hr?symbol=BTCUSDT")
+          ]);
+          const klines1h = await kl1hRes.json();
+          const klines4h = await kl4hRes.json();
+          const ticker   = await tkRes.json();
+          const closes1h = klines1h.map(k => parseFloat(k[4]));
+          const closes4h = klines4h.map(k => parseFloat(k[4]));
+          const vols1h   = klines1h.map(k => parseFloat(k[5]));
+          const chgPct   = parseFloat(ticker.priceChangePercent);
+          // 缓存去掉最后一根（当前未完成K线）的历史数据
+          _klinesCache = {
+            closes1h_base: closes1h.slice(0, -1),
+            closes4h_base: closes4h.slice(0, -1),
+            vols1h,
+            chgPct,
+            lastOpen1h: parseFloat(klines1h[klines1h.length - 1][1])
+          };
+          // 用实时价格（如果有）或最新K线 close 计算信号
+          calcAndRenderSignal(currentMarketPrice && currentMarketPrice > 0 ? currentMarketPrice : closes1h[closes1h.length - 1]);
         } catch (e) {
           signalTitle.textContent = "获取数据失败";
           signalSub.textContent   = "请检查网络连接后点击刷新";
@@ -1884,7 +1864,12 @@
             livePriceEl.textContent = fmt(price, 2);
             currentMarketPrice = price;
             updateChallenge();
-            if (_signalCache) renderPriceViews(price);
+            renderPriceViews(price);
+            // 每秒最多重算一次信号指标
+            if (_klinesCache && !_signalThrottle) {
+              _signalThrottle = setTimeout(() => { _signalThrottle = null; }, 1000);
+              calcAndRenderSignal(price);
+            }
           } catch (_) {}
         });
       }
