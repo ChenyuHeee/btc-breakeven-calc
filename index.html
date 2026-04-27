@@ -529,7 +529,7 @@
     <div class="order-modal">
       <div class="order-modal-title" id="omTitle">确认下单</div>
       <div id="omBody"></div>
-      <div class="order-modal-warn">⚠️ 此操作将直接在 Binance 现货账户执行市价单，成交后无法撤销。请确认账号已开启「现货交易」权限。</div>
+      <div class="order-modal-warn" id="omWarn">⚠️ 此操作将直接在 Binance 现货账户执行市价单，成交后无法撤销。请确认账号已开启「现货交易」权限。</div>
       <div class="order-modal-btns">
         <button class="om-cancel-btn" id="omCancel">取消</button>
         <button class="om-confirm-btn" id="omConfirm">确认下单</button>
@@ -840,11 +840,15 @@
       }
 
       // 弹出确认对话框并在用户确认后下单
-      function showOrderModal({ title, rows, confirmClass, execBtn, ocoParams, futuresTpSl, successMsg, onConfirm }) {
+      function showOrderModal({ title, rows, confirmClass, execBtn, ocoParams, futuresTpSl, successMsg, onConfirm, isFutures }) {
         omTitle.textContent = title;
         omBody.innerHTML = rows.map(([k, v]) =>
           `<div class="order-modal-row"><span>${k}</span><span>${v}</span></div>`
         ).join("");
+        const omWarn = document.getElementById("omWarn");
+        if (omWarn) omWarn.textContent = (isFutures || futuresTpSl)
+          ? "⚠️ 此操作将在 Binance U本位合约账户下单，成交后无法撤销。请确认账号已开启「期货交易」权限。"
+          : "⚠️ 此操作将直接在 Binance 现货账户执行市价单，成交后无法撤销。请确认账号已开启「现货交易」权限。";
         omConfirm.className = "om-confirm-btn " + confirmClass;
         omConfirm.textContent = "确认下单";
         omConfirm.disabled = false;
@@ -1403,24 +1407,55 @@
           tpStop.textContent      = "$" + Math.round(stopPrice).toLocaleString();
           if (hasApiKey && liveUsdtBalance !== null && liveUsdtBalance > 1) {
             const posPct  = c.score >= 5 ? 30 : c.score >= 3 ? 20 : 10;
-            const buyUsdt = +(liveUsdtBalance * posPct / 100).toFixed(2);
-            execBuyBtn.onclick = () => showOrderModal({
-              title: "确认买入 BTC",
-              rows: [
-                ["交易对", "BTC / USDT 现货"],
-                ["方向", "市价买入"],
-                ["花费金额", buyUsdt.toLocaleString() + " USDT"],
-                ["止盈目标", "$" + Math.round(targetPrice).toLocaleString()],
-                ["止损限价", "$" + Math.round(stopPrice).toLocaleString()]
-              ],
-              confirmClass: "buy-btn",
-              execBtn: execBuyBtn,
-              ocoParams: { targetPrice, stopPrice },
-              onConfirm: () => binanceSignedPost("/api/v3/order", {
-                symbol: "BTCUSDT", side: "BUY", type: "MARKET",
-                quoteOrderQty: buyUsdt
-              })
-            });
+            const rawUsdt = liveUsdtBalance * posPct / 100;
+            const buyUsdt = futuresMode
+              ? +Math.min(rawUsdt, liveUsdtBalance * 0.5).toFixed(2)
+              : +rawUsdt.toFixed(2);
+            if (futuresMode) {
+              const LEV    = 3;
+              const btcQty = Math.floor(buyUsdt * LEV / price * 1000) / 1000;
+              execBuyBtn.onclick = () => showOrderModal({
+                title: "U本位合约做多",
+                rows: [
+                  ["交易对", "BTCUSDT 永续合约"],
+                  ["方向", "做多（开多）"],
+                  ["杠杆", LEV + "x"],
+                  ["开仓量", btcQty + " BTC"],
+                  ["保证金约", buyUsdt.toFixed(2) + " USDT"],
+                  ["止盈触发", "$" + Math.round(targetPrice).toLocaleString()],
+                  ["止损触发", "$" + Math.round(stopPrice).toLocaleString()]
+                ],
+                confirmClass: "buy-btn",
+                execBtn: execBuyBtn,
+                futuresTpSl: { targetPrice, stopPrice },
+                successMsg: "开多成功！",
+                onConfirm: async () => {
+                  await fapiPost("/fapi/v1/leverage", { symbol: "BTCUSDT", leverage: LEV });
+                  return fapiPost("/fapi/v1/order", {
+                    symbol: "BTCUSDT", side: "BUY", type: "MARKET", quantity: btcQty,
+                    ...(futuresHedgeMode ? { positionSide: "LONG" } : {})
+                  });
+                }
+              });
+            } else {
+              execBuyBtn.onclick = () => showOrderModal({
+                title: "确认买入 BTC",
+                rows: [
+                  ["交易对", "BTC / USDT 现货"],
+                  ["方向", "市价买入"],
+                  ["花费金额", buyUsdt.toLocaleString() + " USDT"],
+                  ["止盈目标", "$" + Math.round(targetPrice).toLocaleString()],
+                  ["止损限价", "$" + Math.round(stopPrice).toLocaleString()]
+                ],
+                confirmClass: "buy-btn",
+                execBtn: execBuyBtn,
+                ocoParams: { targetPrice, stopPrice },
+                onConfirm: () => binanceSignedPost("/api/v3/order", {
+                  symbol: "BTCUSDT", side: "BUY", type: "MARKET",
+                  quoteOrderQty: buyUsdt
+                })
+              });
+            }
           }
         }
 
