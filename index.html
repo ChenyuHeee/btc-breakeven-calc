@@ -681,6 +681,10 @@
       chStopInput.value = chStopPct;
       let feeOpen = false; // kept for future use
 
+      // BTC 下单数量截断到 5 位小数（Binance LOT_SIZE step = 0.00001）
+      // 必须用 floor 而非 round，否则可能超出可用余额
+      function floorBtc(n) { return Math.floor(n * 100000) / 100000; }
+
       // ── HMAC-SHA256 (SubtleCrypto) ──
       async function hmacSHA256(secret, message) {
         const enc = new TextEncoder();
@@ -1445,8 +1449,8 @@
           hmTargetSub.textContent = "+" + tgtPct.toFixed(1) + "% （布林上轨）";
           hmStop.textContent      = "$" + Math.round(price * (1 - stopPct / 100)).toLocaleString();
           if (hasApiKey) {
-            const freeQty2   = +(liveBtcFree ?? liveBtcBalance).toFixed(6);
-            const lockedQty2 = +(liveBtcBalance - freeQty2).toFixed(6);
+            const freeQty2   = floorBtc(liveBtcFree ?? liveBtcBalance);
+            const lockedQty2 = floorBtc(Math.max(0, liveBtcBalance - (liveBtcFree ?? liveBtcBalance)));
             if (freeQty2 > 0.000001 && execHoldSellBtn.className.includes("exec-sell")) {
               execHoldSellBtn.onclick = () => showOrderModal({
                 title: "卖出可用 BTC",
@@ -1487,7 +1491,7 @@
                   await new Promise(r => setTimeout(r, 600));
                   return binanceSignedPost("/api/v3/order", {
                     symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                    quantity: +liveBtcBalance.toFixed(6)
+                    quantity: floorBtc(liveBtcBalance)
                   });
                 }
               });
@@ -1909,8 +1913,8 @@
             hmStopSub.textContent   = "-" + stpPct + "% 止损";
 
             if (hasApiKey) {
-              const freeQty   = futuresMode ? liveBtcBalance : +(liveBtcFree ?? liveBtcBalance).toFixed(6);
-              const lockedQty = futuresMode ? 0 : +(liveBtcBalance - freeQty).toFixed(6);
+              const freeQty   = futuresMode ? floorBtc(liveBtcBalance) : floorBtc(liveBtcFree ?? liveBtcBalance);
+              const lockedQty = futuresMode ? 0 : floorBtc(Math.max(0, liveBtcBalance - (liveBtcFree ?? liveBtcBalance)));
               if (freeQty > 0.000001) {
                 execHoldSellBtn.style.display = "block";
                 execHoldSellBtn.className     = "trade-exec-btn exec-sell";
@@ -1963,7 +1967,7 @@
                       await new Promise(r => setTimeout(r, 600));
                       return binanceSignedPost("/api/v3/order", {
                         symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                        quantity: +liveBtcBalance.toFixed(6)
+                        quantity: floorBtc(liveBtcBalance)
                       });
                     }
                   });
@@ -1994,15 +1998,15 @@
 
             if (hasApiKey && hasBtc) {
               const freeQty   = futuresMode
-                ? liveBtcBalance
-                : +(liveBtcFree ?? liveBtcBalance).toFixed(6);
-              const lockedQty = futuresMode ? 0 : +(liveBtcBalance - freeQty).toFixed(6);
+                ? floorBtc(liveBtcBalance)
+                : floorBtc(liveBtcFree ?? liveBtcBalance);
+              const lockedQty = futuresMode ? 0 : floorBtc(Math.max(0, liveBtcBalance - (liveBtcFree ?? liveBtcBalance)));
               const hasOco    = !futuresMode && lockedQty > 0.000001;
               const sellQty   = hasOco
-                ? +liveBtcBalance.toFixed(6)
+                ? floorBtc(liveBtcBalance)
                 : futuresMode
-                  ? +liveBtcBalance.toFixed(6)
-                  : +(freeQty * sellRatioPct / 100).toFixed(6);
+                  ? floorBtc(liveBtcBalance)
+                  : floorBtc(freeQty * sellRatioPct / 100);
               execSellBtn.className   = "trade-exec-btn exec-sell";
               execSellBtn.textContent = futuresMode
                 ? "⚡ 合约平多 " + sellQty + " BTC"
