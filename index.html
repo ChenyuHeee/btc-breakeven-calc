@@ -1426,32 +1426,32 @@
             hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
             hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "）";
           } else {
-            const recentTrades = (window._lastTrades || []).slice().sort((a, b) => b.time - a.time);
-            let avgCost = null;
-            if (recentTrades.length > 0) {
-              let needed = liveBtcBalance, totalCost = 0, matched = 0;
-              for (const t of recentTrades) {
-                if (needed <= 0.000001) break;
-                if (!t.isBuyer) continue;
-                const qty      = parseFloat(t.qty);
-                const take     = Math.min(qty, needed);
-                const ratio    = take / qty;
-                const quoteQty = parseFloat(t.quoteQty);
-                let feeCost    = 0;
-                if (t.commissionAsset === "USDT")     feeCost = parseFloat(t.commission) * ratio;
-                else if (t.commissionAsset === "BTC") feeCost = parseFloat(t.commission) * parseFloat(t.price) * ratio;
-                totalCost += quoteQty * ratio + feeCost;
-                matched   += take;
-                needed    -= take;
-              }
-              if (matched > 0.000001) avgCost = totalCost / matched;
+            const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time); // 升序
+            // 找最近一次卖出时间（全仓卖出的分界点）
+            let lastSellTime = 0;
+            for (const t of rawTrades) {
+              if (!t.isBuyer && t.time > lastSellTime) lastSellTime = t.time;
             }
+            // 只统计「最近卖出之后」的买入记录
+            let avgCost = null, totalCost = 0, totalQty = 0;
+            for (const t of rawTrades) {
+              if (!t.isBuyer) continue;
+              if (t.time <= lastSellTime) continue;
+              totalQty  += parseFloat(t.qty);
+              totalCost += parseFloat(t.quoteQty);
+              if (t.commissionAsset === "USDT") totalCost += parseFloat(t.commission);
+            }
+            if (totalQty > 0.000001) avgCost = totalCost / totalQty;
             if (avgCost && avgCost > 0) {
               const pnlPct  = (price / avgCost - 1) * 100;
               const pnlUsdt = (price - avgCost) * liveBtcBalance;
               hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
               hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价含手续费 $" + Math.round(avgCost).toLocaleString() + "）";
+              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价 $" + Math.round(avgCost).toLocaleString() + "）";
+            } else {
+              hmPnl.textContent    = "--";
+              hmPnl.style.color    = "var(--text)";
+              hmPnlSub.textContent = "同步账户后可显示实际盈亏";
             }
           }
           const tgtPct = c.bollUpper ? Math.max(4, Math.min(20, (c.bollUpper - price) / price * 100)) : 8;
@@ -1889,37 +1889,28 @@
               hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
               hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "）";
             } else {
-              const recentTrades = (window._lastTrades || []).slice().sort((a, b) => b.time - a.time);
-              if (recentTrades.length > 0) {
-                let needed    = liveBtcBalance;
-                let totalCost = 0;
-                let matched   = 0;
-                for (const t of recentTrades) {
-                  if (needed <= 0.000001) break;
-                  if (!t.isBuyer) continue;
-                  const qty   = parseFloat(t.qty);
-                  const take  = Math.min(qty, needed);
-                  const ratio = take / qty;
-                  const quoteQty = parseFloat(t.quoteQty);
-                  let   feeCost  = 0;
-                  if (t.commissionAsset === "USDT") {
-                    feeCost = parseFloat(t.commission) * ratio;
-                  } else if (t.commissionAsset === "BTC") {
-                    feeCost = parseFloat(t.commission) * parseFloat(t.price) * ratio;
-                  }
-                  totalCost += quoteQty * ratio + feeCost;
-                  matched   += take;
-                  needed    -= take;
-                }
-                if (matched > 0.000001) avgCost = totalCost / matched;
+              const rawTrades = (window._lastTrades || []).slice().sort((a, b) => a.time - b.time); // 升序
+              // 找最近一次卖出时间（全仓卖出的分界点）
+              let lastSellTime = 0;
+              for (const t of rawTrades) {
+                if (!t.isBuyer && t.time > lastSellTime) lastSellTime = t.time;
               }
+              // 只统计「最近卖出之后」的买入记录
+              let avgCost = null, totalCost = 0, totalQty = 0;
+              for (const t of rawTrades) {
+                if (!t.isBuyer) continue;
+                if (t.time <= lastSellTime) continue;
+                totalQty  += parseFloat(t.qty);
+                totalCost += parseFloat(t.quoteQty);
+                if (t.commissionAsset === "USDT") totalCost += parseFloat(t.commission);
+              }
+              if (totalQty > 0.000001) avgCost = totalCost / totalQty;
               if (avgCost && avgCost > 0) {
                 const pnlPct  = (price / avgCost - 1) * 100;
                 const pnlUsdt = (price - avgCost) * liveBtcBalance;
-                const incomplete = matched < liveBtcBalance * 0.99;
                 hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
                 hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-                hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价含手续费 $" + Math.round(avgCost).toLocaleString() + (incomplete ? "  ⚠️历史记录不全" : "") + "）";
+                hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价 $" + Math.round(avgCost).toLocaleString() + "）";
               } else {
                 hmPnl.textContent    = "--";
                 hmPnl.style.color    = "var(--text)";
