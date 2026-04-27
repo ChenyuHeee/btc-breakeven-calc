@@ -2008,7 +2008,10 @@
             hmStopSub.textContent   = "-" + stpPct + "% 止损";
 
             if (hasApiKey) {
-              const freeQty   = futuresMode ? floorBtc(liveBtcBalance) : floorBtc(liveBtcFree ?? liveBtcBalance);
+              // 合约模式：用原始持仓量（3位小数），不截断，避免精度误差导致-2010
+              const freeQty   = futuresMode
+                ? (liveFuturesPosition ? parseFloat(Math.abs(liveFuturesPosition.qty).toFixed(3)) : 0)
+                : floorBtc(liveBtcFree ?? liveBtcBalance);
               const lockedQty = futuresMode ? 0 : floorBtc(Math.max(0, liveBtcBalance - (liveBtcFree ?? liveBtcBalance)));
               if (freeQty > 0.000001) {
                 execHoldSellBtn.style.display = "block";
@@ -2093,15 +2096,16 @@
             spReasonSub.textContent = sellReasons.length > 2 ? "+ " + sellReasons.slice(2).join(" · ") : "";
 
             if (hasApiKey && hasBtc) {
+              // 合约模式：用原始持仓量（3位精度），不截断
               const freeQty   = futuresMode
-                ? floorBtc(liveBtcBalance)
+                ? (liveFuturesPosition ? parseFloat(Math.abs(liveFuturesPosition.qty).toFixed(3)) : 0)
                 : floorBtc(liveBtcFree ?? liveBtcBalance);
               const lockedQty = futuresMode ? 0 : floorBtc(Math.max(0, liveBtcBalance - (liveBtcFree ?? liveBtcBalance)));
               const hasOco    = !futuresMode && lockedQty > 0.000001;
               const sellQty   = hasOco
                 ? floorBtc(liveBtcBalance)
                 : futuresMode
-                  ? floorBtc(liveBtcBalance)
+                  ? freeQty
                   : floorBtc(freeQty * sellRatioPct / 100);
               execSellBtn.className   = "trade-exec-btn exec-sell";
               execSellBtn.textContent = futuresMode
