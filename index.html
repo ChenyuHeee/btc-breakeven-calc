@@ -1417,32 +1417,42 @@
         // ── 持仓监控：BTC 估值 / 盈亏 / 止盈止损参考价 ──
         if (hasBtc && holdingMonitor.style.display !== "none") {
           hmBtcSub.textContent = "≈ $" + Math.round(liveBtcBalance * price).toLocaleString();
-          const recentTrades = (window._lastTrades || []).slice().sort((a, b) => b.time - a.time);
-          let avgCost = null;
-          if (recentTrades.length > 0) {
-            let needed = liveBtcBalance, totalCost = 0, matched = 0;
-            for (const t of recentTrades) {
-              if (needed <= 0.000001) break;
-              if (!t.isBuyer) continue;
-              const qty      = parseFloat(t.qty);
-              const take     = Math.min(qty, needed);
-              const ratio    = take / qty;
-              const quoteQty = parseFloat(t.quoteQty);
-              let feeCost    = 0;
-              if (t.commissionAsset === "USDT")     feeCost = parseFloat(t.commission) * ratio;
-              else if (t.commissionAsset === "BTC") feeCost = parseFloat(t.commission) * parseFloat(t.price) * ratio;
-              totalCost += quoteQty * ratio + feeCost;
-              matched   += take;
-              needed    -= take;
-            }
-            if (matched > 0.000001) avgCost = totalCost / matched;
-          }
-          if (avgCost && avgCost > 0) {
+          // 合约模式直接用 entryPrice / unrealizedPnl；现货从 trades 回推
+          if (futuresMode && liveFuturesPosition && liveFuturesPosition.entryPrice > 0) {
+            const avgCost = liveFuturesPosition.entryPrice;
+            const pnl     = liveFuturesPosition.unrealizedPnl;
             const pnlPct  = (price / avgCost - 1) * 100;
-            const pnlUsdt = (price - avgCost) * liveBtcBalance;
             hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
             hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-            hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价含手续费 $" + Math.round(avgCost).toLocaleString() + "）";
+            hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "）";
+          } else {
+            const recentTrades = (window._lastTrades || []).slice().sort((a, b) => b.time - a.time);
+            let avgCost = null;
+            if (recentTrades.length > 0) {
+              let needed = liveBtcBalance, totalCost = 0, matched = 0;
+              for (const t of recentTrades) {
+                if (needed <= 0.000001) break;
+                if (!t.isBuyer) continue;
+                const qty      = parseFloat(t.qty);
+                const take     = Math.min(qty, needed);
+                const ratio    = take / qty;
+                const quoteQty = parseFloat(t.quoteQty);
+                let feeCost    = 0;
+                if (t.commissionAsset === "USDT")     feeCost = parseFloat(t.commission) * ratio;
+                else if (t.commissionAsset === "BTC") feeCost = parseFloat(t.commission) * parseFloat(t.price) * ratio;
+                totalCost += quoteQty * ratio + feeCost;
+                matched   += take;
+                needed    -= take;
+              }
+              if (matched > 0.000001) avgCost = totalCost / matched;
+            }
+            if (avgCost && avgCost > 0) {
+              const pnlPct  = (price / avgCost - 1) * 100;
+              const pnlUsdt = (price - avgCost) * liveBtcBalance;
+              hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
+              hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
+              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价含手续费 $" + Math.round(avgCost).toLocaleString() + "）";
+            }
           }
           const tgtPct = c.bollUpper ? Math.max(4, Math.min(20, (c.bollUpper - price) / price * 100)) : 8;
           hmTarget.textContent    = "$" + Math.round(price * (1 + tgtPct / 100)).toLocaleString();
@@ -1868,41 +1878,52 @@
             hmBtc.textContent    = liveBtcBalance.toFixed(6) + " BTC";
             hmBtcSub.textContent = "≈ $" + Math.round(btcNow).toLocaleString();
 
-            const recentTrades = (window._lastTrades || []).slice().sort((a, b) => b.time - a.time);
+            // 合约模式：直接使用 Binance 返回的 entryPrice / unrealizedPnl（已含加权均价）
+            // 现货模式：从近期成交记录逆推加权成本
             let avgCost = null;
-            if (recentTrades.length > 0) {
-              let needed    = liveBtcBalance;
-              let totalCost = 0;
-              let matched   = 0;
-              for (const t of recentTrades) {
-                if (needed <= 0.000001) break;
-                if (!t.isBuyer) continue;
-                const qty   = parseFloat(t.qty);
-                const take  = Math.min(qty, needed);
-                const ratio = take / qty;
-                const quoteQty = parseFloat(t.quoteQty);
-                let   feeCost  = 0;
-                if (t.commissionAsset === "USDT") {
-                  feeCost = parseFloat(t.commission) * ratio;
-                } else if (t.commissionAsset === "BTC") {
-                  feeCost = parseFloat(t.commission) * parseFloat(t.price) * ratio;
-                }
-                totalCost += quoteQty * ratio + feeCost;
-                matched   += take;
-                needed    -= take;
-              }
-              if (matched > 0.000001) avgCost = totalCost / matched;
-            }
-            if (avgCost && avgCost > 0) {
-              const pnlPct  = (price / avgCost - 1) * 100;
-              const pnlUsdt = (price - avgCost) * liveBtcBalance;
+            if (futuresMode && liveFuturesPosition && liveFuturesPosition.entryPrice > 0) {
+              avgCost = liveFuturesPosition.entryPrice;
+              const pnl    = liveFuturesPosition.unrealizedPnl;
+              const pnlPct = (price / avgCost - 1) * 100;
               hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
               hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价含手续费 $" + Math.round(avgCost).toLocaleString() + "）";
+              hmPnlSub.textContent = (pnl >= 0 ? "+" : "") + pnl.toFixed(2) + " USDT（合约均价 $" + Math.round(avgCost).toLocaleString() + "）";
             } else {
-              hmPnl.textContent    = "--";
-              hmPnl.style.color    = "var(--text)";
-              hmPnlSub.textContent = "同步账户后可显示实际盈亏";
+              const recentTrades = (window._lastTrades || []).slice().sort((a, b) => b.time - a.time);
+              if (recentTrades.length > 0) {
+                let needed    = liveBtcBalance;
+                let totalCost = 0;
+                let matched   = 0;
+                for (const t of recentTrades) {
+                  if (needed <= 0.000001) break;
+                  if (!t.isBuyer) continue;
+                  const qty   = parseFloat(t.qty);
+                  const take  = Math.min(qty, needed);
+                  const ratio = take / qty;
+                  const quoteQty = parseFloat(t.quoteQty);
+                  let   feeCost  = 0;
+                  if (t.commissionAsset === "USDT") {
+                    feeCost = parseFloat(t.commission) * ratio;
+                  } else if (t.commissionAsset === "BTC") {
+                    feeCost = parseFloat(t.commission) * parseFloat(t.price) * ratio;
+                  }
+                  totalCost += quoteQty * ratio + feeCost;
+                  matched   += take;
+                  needed    -= take;
+                }
+                if (matched > 0.000001) avgCost = totalCost / matched;
+              }
+              if (avgCost && avgCost > 0) {
+                const pnlPct  = (price / avgCost - 1) * 100;
+                const pnlUsdt = (price - avgCost) * liveBtcBalance;
+                hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
+                hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
+                hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（均价含手续费 $" + Math.round(avgCost).toLocaleString() + "）";
+              } else {
+                hmPnl.textContent    = "--";
+                hmPnl.style.color    = "var(--text)";
+                hmPnlSub.textContent = "同步账户后可显示实际盈亏";
+              }
             }
 
             const tgtPct = boll ? Math.max(4, Math.min(20, (boll.upper - price) / price * 100)) : 8;
