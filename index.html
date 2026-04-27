@@ -735,8 +735,12 @@
         if (!res.ok) {
           const raw = await res.text().catch(() => "");
           let msg = "HTTP " + res.status;
-          try { const j = JSON.parse(raw); msg += "：" + (j.msg || raw.slice(0, 200)) + (j.code ? " (code " + j.code + ")" : ""); }
-          catch { if (raw) msg += "：" + raw.slice(0, 200); }
+          try {
+            const j = JSON.parse(raw);
+            msg += "：" + (j.msg || raw.slice(0, 200)) + (j.code ? " (code " + j.code + ")" : "");
+            if (res.status === 401 || j.code === -2015 || j.code === -2014)
+              msg += "\n💡 请到 Binance API管理 → 勾选 \"启用期货(Enable Futures)\" 权限";
+          } catch { if (raw) msg += "：" + raw.slice(0, 200); }
           throw new Error(msg);
         }
         return res.json();
@@ -757,8 +761,12 @@
         if (!res.ok) {
           const raw = await res.text().catch(() => "");
           let msg = "HTTP " + res.status;
-          try { const j = JSON.parse(raw); msg += "：" + (j.msg || raw.slice(0, 200)); }
-          catch { if (raw) msg += "：" + raw.slice(0, 200); }
+          try {
+            const j = JSON.parse(raw);
+            msg += "：" + (j.msg || raw.slice(0, 200));
+            if (res.status === 401 || j.code === -2015 || j.code === -2014)
+              msg += "\n💡 请到 Binance API管理 → 勾选 \"启用期货(Enable Futures)\" 权限";
+          } catch { if (raw) msg += "：" + raw.slice(0, 200); }
           throw new Error(msg);
         }
         return res.json();
