@@ -1085,7 +1085,10 @@
           liveUsdtBalance = usdt ? parseFloat(usdt.availableBalance) : 0;
 
           const positions = await fapiGet("/fapi/v2/positionRisk", { symbol: "BTCUSDT" });
-          const pos = positions.find(p => p.symbol === "BTCUSDT" && Math.abs(parseFloat(p.positionAmt)) > 0.000001);
+          // 双向持仓模式返回 LONG + SHORT 两条，取持仓量不为0的多头
+          const pos = futuresHedgeMode
+            ? positions.find(p => p.symbol === "BTCUSDT" && p.positionSide === "LONG" && Math.abs(parseFloat(p.positionAmt)) > 0.000001)
+            : positions.find(p => p.symbol === "BTCUSDT" && Math.abs(parseFloat(p.positionAmt)) > 0.000001);
           liveFuturesPosition = pos ? {
             qty:          parseFloat(pos.positionAmt),
             entryPrice:   parseFloat(pos.entryPrice),
@@ -2021,6 +2024,7 @@
                   : "⚡ 卖出可用 " + freeQty + " BTC";
                 execHoldSellBtn.onclick = () => showOrderModal({
                     title: futuresMode ? "确认合约平仓" : "卖出可用 BTC",
+                    isFutures: futuresMode,
                     rows: futuresMode
                       ? [["交易对", "BTCUSDT 永续合约"], ["方向", "平多（卖出）"], ["平仓量", freeQty + " BTC"], ["当前价", "$" + Math.round(price).toLocaleString()]]
                       : [["交易对", "BTC / USDT 现货"], ["方向", "市价卖出"], ["卖出数量", freeQty + " BTC (可用)"], ["当前参考价", "$" + Math.round(price).toLocaleString()]],
@@ -2132,6 +2136,7 @@
                     ],
                 confirmClass: "sell-btn",
                 execBtn: execSellBtn,
+                isFutures: futuresMode,
                 successMsg: futuresMode ? "平仓成功！" : "卖出成功！",
                 onConfirm: futuresMode
                   ? () => fapiPost("/fapi/v1/order", {
