@@ -1414,6 +1414,11 @@
             if (futuresMode) {
               const LEV    = 3;
               const btcQty = Math.floor(buyUsdt * LEV / price * 1000) / 1000;
+              if (btcQty < 0.001) {
+                execBuyBtn.className = "trade-exec-btn exec-disabled";
+                execBuyBtn.textContent = "🔒 保证金不足（需 ≥ " + Math.ceil(price * 0.001 / LEV) + " USDT）";
+                execBuyBtn.onclick = null;
+              } else {
               execBuyBtn.onclick = () => showOrderModal({
                 title: "U本位合约做多",
                 rows: [
@@ -1437,6 +1442,7 @@
                   });
                 }
               });
+              } // end btcQty >= 0.001
             } else {
               execBuyBtn.onclick = () => showOrderModal({
                 title: "确认买入 BTC",
@@ -1841,10 +1847,15 @@
                 : +rawUsdt.toFixed(2);
               execBuyBtn.className = "trade-exec-btn exec-buy";
               if (futuresMode) {
-                // \u5408\u7ea6\u6a21\u5f0f\uff1a\u7528\u6740 3x \u5f00\u591a
+                // 合约模式：用满 3x 开多
                 const LEV     = 3;
                 const btcQty  = Math.floor(buyUsdt * LEV / price * 1000) / 1000;
-                execBuyBtn.textContent = "\u26a1 \u5408\u7ea6\u505a\u591a " + btcQty + " BTC\uff083x\uff09";
+                if (btcQty < 0.001) {
+                  execBuyBtn.className = "trade-exec-btn exec-disabled";
+                  execBuyBtn.textContent = "🔒 保证金不足（需 ≥ " + Math.ceil(price * 0.001 / LEV) + " USDT）";
+                  execBuyBtn.onclick = null;
+                } else {
+                execBuyBtn.textContent = "⚡ 合约做多 " + btcQty + " BTC（3x）";
                 execBuyBtn.onclick = () => showOrderModal({
                   title: "U\u672c\u4f4d\u5408\u7ea6\u505a\u591a",
                   rows: [
@@ -1868,8 +1879,8 @@
                     });
                   }
                 });
+                } // end btcQty >= 0.001
               } else {
-                // \u73b0\u8d27\u6a21\u5f0f
                 execBuyBtn.textContent = "\u26a1 \u4e00\u952e\u4e70\u5165 " + buyUsdt.toLocaleString() + " USDT";
                 execBuyBtn.onclick = () => showOrderModal({
                   title: "\u786e\u8ba4\u4e70\u5165 BTC",
