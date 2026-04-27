@@ -431,12 +431,12 @@
         </div>
         <div class="indicators">
           <div class="ind-box">
-            <div class="ind-label">RSI(14) 1h</div>
+            <div class="ind-label">RSI(14) 5m</div>
             <div class="ind-value" id="indRsiVal">--</div>
             <div class="ind-bar-wrap"><div class="ind-bar" id="indRsiBar" style="width:0%;background:#ccc"></div></div>
           </div>
           <div class="ind-box">
-            <div class="ind-label">RSI(14) 4h</div>
+            <div class="ind-label">RSI(14) 15m</div>
             <div class="ind-value" id="indRsi4hVal">--</div>
             <div class="ind-bar-wrap"><div class="ind-bar" id="indRsi4hBar" style="width:0%;background:#ccc"></div></div>
           </div>
@@ -1324,14 +1324,14 @@
 
           // ── 显示指标 ──
 
-          // RSI 1h
+          // RSI 5m
           indRsiVal.textContent = rsi1h != null ? rsi1h.toFixed(1) : "--";
           indRsiBar.style.width = (rsi1h ?? 50) + "%";
           if      (rsi1h < 35) { indRsiVal.className="ind-value good"; indRsiBar.style.background="var(--green)"; }
           else if (rsi1h < 55) { indRsiVal.className="ind-value mid";  indRsiBar.style.background="#f0c040"; }
           else                 { indRsiVal.className="ind-value bad";  indRsiBar.style.background="var(--red)"; }
 
-          // RSI 4h
+          // RSI 15m
           if (indRsi4hVal) {
             indRsi4hVal.textContent = rsi4h != null ? rsi4h.toFixed(1) : "--";
             indRsi4hBar.style.width = (rsi4h ?? 50) + "%";
@@ -1400,7 +1400,7 @@
           // ── 综合评分 ──
           let score = macdScore;
 
-          // 多周期共振：1h 和 4h RSI 方向一致则增强信号
+          // 多周期共振：5m 和 15m RSI 方向一致则增强信号
           const rsiAgree = rsi1h != null && rsi4h != null
             && ((rsi1h < 50 && rsi4h < 50) || (rsi1h > 55 && rsi4h > 55));
           const rsiBothOversold  = rsi1h < 40 && rsi4h < 45;
@@ -1462,10 +1462,10 @@
           }
 
           // ── 生成信号文字 ──
-          const rsiBothNote = rsiBothOversold  ? "⚡ 1h+4h 双周期同时超卖，信号强度高。" :
-                              rsiBothOverbought ? "⚠️ 1h+4h 双周期同时超买，谨慎追高。" :
-                              rsiAgree ? "1h 与 4h RSI 方向一致，信号可信度提升。" :
-                              "1h 与 4h RSI 方向不一致，信号偏弱。";
+          const rsiBothNote = rsiBothOversold  ? "⚡ 5m+15m 双周期同时超卖，信号强度高。" :
+                              rsiBothOverbought ? "⚠️ 5m+15m 双周期同时超买，谨慎追高。" :
+                              rsiAgree ? "5m 与 15m RSI 方向一致，信号可信度提升。" :
+                              "5m 与 15m RSI 方向不一致，信号偏弱。";
           const bollNote = boll ? (bollPct < 25 ? "价格接近布林带下轨，历史上属于低估区。"
                                  : bollPct > 75 ? "价格接近布林带上轨，注意高位风险。"
                                  : "价格在布林带中间区间。") : "";
@@ -1502,7 +1502,7 @@
                 : "【趋势模式】RSI 双周期确认 + 价格站上均线 + MACD 多头，趋势成立。")
             : "【低吸模式】动能指标无法确认趋势，当前信号基于价格是否处于低位（布林下轨/超卖区）。";
           signalNote.textContent = modeNote + " " + rsiBothNote + " " + bollNote + " " + volNote +
-            "（数据：Binance 1h+4h K线，仅供参考，不构成投资建议）";
+            "（数据：Binance 5m+15m K线，仅供参考，不构成投资建议）";
 
           // ── 交易建议 ──
           const capital    = liveUsdtBalance !== null ? liveUsdtBalance : (chStartVal || 0);
@@ -1588,12 +1588,12 @@
           let sellScore = 0;
           const sellReasons = [];
 
-          if      (rsi1h > 80)        { sellScore += 4; sellReasons.push("RSI 1h " + rsi1h.toFixed(0) + " 极度超买"); }
-          else if (rsi1h > 70)        { sellScore += 3; sellReasons.push("RSI 1h " + rsi1h.toFixed(0) + " 超买"); }
-          else if (rsi1h > 65)        { sellScore += 1; sellReasons.push("RSI 1h 偏高"); }
+          if      (rsi1h > 80)        { sellScore += 4; sellReasons.push("RSI 5m " + rsi1h.toFixed(0) + " 极度超买"); }
+          else if (rsi1h > 70)        { sellScore += 3; sellReasons.push("RSI 5m " + rsi1h.toFixed(0) + " 超买"); }
+          else if (rsi1h > 65)        { sellScore += 1; sellReasons.push("RSI 5m 偏高"); }
           if (rsi4h != null) {
-            if      (rsi4h > 75)      { sellScore += 3; sellReasons.push("RSI 4h " + rsi4h.toFixed(0) + " 超买"); }
-            else if (rsi4h > 65)      { sellScore += 2; sellReasons.push("RSI 4h 偏高"); }
+            if      (rsi4h > 75)      { sellScore += 3; sellReasons.push("RSI 15m " + rsi4h.toFixed(0) + " 超买"); }
+            else if (rsi4h > 65)      { sellScore += 2; sellReasons.push("RSI 15m 偏高"); }
           }
           if      (bollPct > 95)      { sellScore += 4; sellReasons.push("突破布林上轨"); }
           else if (bollPct > 85)      { sellScore += 2; sellReasons.push("布林带上轨区"); }
@@ -1793,12 +1793,12 @@
         signalSub.textContent   = "正在获取多周期数据";
         signalCardEl.className  = "signal-card";
         try {
-          // 同时拿 1h (100根) + 4h (60根) + 24h ticker
+          // 同时拿 5m (200根) + 15m (100根) + 24h ticker
           const sigProxy = (LS.get("proxy") || "").trim().replace(/\/$/, "");
           const sigBase  = sigProxy || BINANCE_API;
           const [kl1hRes, kl4hRes, tkRes] = await Promise.all([
-            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100"),
-            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=4h&limit=60"),
+            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=5m&limit=200"),
+            fetch(sigBase + "/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=100"),
             fetch(sigBase + "/api/v3/ticker/24hr?symbol=BTCUSDT")
           ]);
           const klines1h = await kl1hRes.json();
@@ -1828,7 +1828,7 @@
 
       signalRefresh.addEventListener("click", fetchSignal);
       fetchSignal();
-      setInterval(fetchSignal, 5 * 60 * 1000);
+      setInterval(fetchSignal, 60 * 1000);
 
       function fmt(n, d = 2) {
         if (!Number.isFinite(n)) return "--";
