@@ -1535,24 +1535,33 @@
           hmTargetSub.textContent = "+" + tgtPct.toFixed(1) + "% （布林上轨）";
           hmStop.textContent      = "$" + Math.round(price * (1 - stopPct / 100)).toLocaleString();
           if (hasApiKey) {
-            const freeQty2   = floorBtc(liveBtcFree ?? liveBtcBalance);
-            const lockedQty2 = floorBtc(Math.max(0, liveBtcBalance - (liveBtcFree ?? liveBtcBalance)));
+            const freeQty2   = futuresMode
+              ? (liveFuturesPosition ? parseFloat(Math.abs(liveFuturesPosition.qty).toFixed(3)) : 0)
+              : floorBtc(liveBtcFree ?? liveBtcBalance);
+            const lockedQty2 = futuresMode ? 0 : floorBtc(Math.max(0, liveBtcBalance - (liveBtcFree ?? liveBtcBalance)));
             if (freeQty2 > 0.000001 && execHoldSellBtn.className.includes("exec-sell")) {
+              execHoldSellBtn.textContent = futuresMode
+                ? "⚡ 合约平仓 " + freeQty2 + " BTC"
+                : "⚡ 卖出可用 " + freeQty2 + " BTC";
               execHoldSellBtn.onclick = () => showOrderModal({
-                title: "卖出可用 BTC",
-                rows: [
-                  ["交易对", "BTC / USDT 现货"],
-                  ["方向", "市价卖出"],
-                  ["卖出数量", freeQty2 + " BTC (可用)"],
-                  ["当前参考价", "$" + Math.round(price).toLocaleString()]
-                ],
+                title: futuresMode ? "确认合约平仓" : "卖出可用 BTC",
+                isFutures: futuresMode,
+                rows: futuresMode
+                  ? [["交易对", "BTCUSDT 永续合约"], ["方向", "平多（卖出）"], ["平仓量", freeQty2 + " BTC"], ["当前价", "$" + Math.round(price).toLocaleString()]]
+                  : [["交易对", "BTC / USDT 现货"], ["方向", "市价卖出"], ["卖出数量", freeQty2 + " BTC (可用)"], ["当前参考价", "$" + Math.round(price).toLocaleString()]],
                 confirmClass: "sell-btn",
                 execBtn: execHoldSellBtn,
-                successMsg: "卖出成功！",
-                onConfirm: () => binanceSignedPost("/api/v3/order", {
-                  symbol: "BTCUSDT", side: "SELL", type: "MARKET",
-                  quantity: freeQty2
-                })
+                successMsg: futuresMode ? "平仓成功！" : "卖出成功！",
+                onConfirm: futuresMode
+                  ? () => fapiPost("/fapi/v1/order", {
+                      symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                      quantity: freeQty2,
+                      ...(futuresHedgeMode ? { positionSide: "LONG" } : { reduceOnly: "true" })
+                    })
+                  : () => binanceSignedPost("/api/v3/order", {
+                      symbol: "BTCUSDT", side: "SELL", type: "MARKET",
+                      quantity: freeQty2
+                    })
               });
             }
             if (lockedQty2 > 0.000001 && execHoldSellAllBtn.className.includes("exec-sell")) {
