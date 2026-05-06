@@ -1634,9 +1634,10 @@
         // ── 持仓监控：BTC 估值 / 盈亏 / 止盈止损参考价 ──
         if (hasBtc && holdingMonitor.style.display !== "none") {
           hmBtcSub.textContent = "≈ $" + Math.round(liveBtcBalance * price).toLocaleString();
+          var avgCost = null;
           // 合约模式直接用 entryPrice / unrealizedPnl；现货从 trades 回推
           if (futuresMode && liveFuturesPosition && liveFuturesPosition.entryPrice > 0) {
-            const avgCost = liveFuturesPosition.entryPrice;
+            avgCost = liveFuturesPosition.entryPrice;
             const pnl     = liveFuturesPosition.unrealizedPnl;
             // 合约手续费估算：taker 0.05% × 名义价值 × 2（开+平）
             const feeEst  = Math.abs(liveFuturesPosition.qty) * avgCost * 0.001;
@@ -1667,7 +1668,7 @@
               totalCost   += spent;
               totalNetQty += netQty;
             }
-            const avgCost = totalNetQty > 0.000001 ? totalCost / totalNetQty : null;
+            avgCost = totalNetQty > 0.000001 ? totalCost / totalNetQty : null;
             if (avgCost && avgCost > 0) {
               // 卖出价：优先用订单簿加权均价，fallback当前价
               var sellPrice = estimateSellPrice(liveBtcBalance) || (price * 0.9995);
@@ -1686,10 +1687,12 @@
               hmPnlSub.textContent = "同步账户后可显示实际盈亏";
             }
           }
-          const tgtPct = c.bollUpper ? Math.max(4, Math.min(20, (c.bollUpper - price) / price * 100)) : 8;
-          hmTarget.textContent    = "$" + Math.round(price * (1 + tgtPct / 100)).toLocaleString();
-          hmTargetSub.textContent = "+" + tgtPct.toFixed(1) + "% （布林上轨）";
-          hmStop.textContent      = "$" + Math.round(price * (1 - stopPct / 100)).toLocaleString();
+          // 止盈/止损基于入场均价（如有），否则用当前价
+          var refPrice = avgCost && avgCost > 0 ? avgCost : price;
+          var tgtPct = c.bollUpper ? Math.max(4, Math.min(20, (c.bollUpper - refPrice) / refPrice * 100)) : 8;
+          hmTarget.textContent    = "$" + Math.round(refPrice * (1 + tgtPct / 100)).toLocaleString();
+          hmTargetSub.textContent = "+" + tgtPct.toFixed(1) + "% （布林上轨）" + (avgCost > 0 ? " · 基于入场均价" : "");
+          hmStop.textContent      = "$" + Math.round(refPrice * (1 - stopPct / 100)).toLocaleString();
           if (hasApiKey) {
             const freeQty2   = futuresMode
               ? (liveFuturesPosition ? parseFloat(Math.abs(liveFuturesPosition.qty).toFixed(3)) : 0)
@@ -2186,11 +2189,12 @@
                 hmPnlSub.textContent = "同步账户后可显示实际盈亏";
               }
             }
-            const tgtPct = boll ? Math.max(4, Math.min(20, (boll.upper - price) / price * 100)) : 8;
-            const stpPct = chStopPct || 15;
-            hmTarget.textContent    = "$" + Math.round(price * (1 + tgtPct / 100)).toLocaleString();
-            hmTargetSub.textContent = "+" + tgtPct.toFixed(1) + "% （布林上轨）";
-            hmStop.textContent      = "$" + Math.round(price * (1 - stpPct / 100)).toLocaleString();
+            var refP2 = avgCost && avgCost > 0 ? avgCost : price;
+            var tgtPct = boll ? Math.max(4, Math.min(20, (boll.upper - refP2) / refP2 * 100)) : 8;
+            var stpPct = chStopPct || 15;
+            hmTarget.textContent    = "$" + Math.round(refP2 * (1 + tgtPct / 100)).toLocaleString();
+            hmTargetSub.textContent = "+" + tgtPct.toFixed(1) + "% （布林上轨）" + (avgCost > 0 ? " · 基于入场均价" : "");
+            hmStop.textContent      = "$" + Math.round(refP2 * (1 - stpPct / 100)).toLocaleString();
             hmStopSub.textContent   = "-" + stpPct + "% 止损";
 
             if (hasApiKey) {
