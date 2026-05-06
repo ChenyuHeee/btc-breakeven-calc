@@ -2533,7 +2533,82 @@ ${top3.length?'## 竞争对手 Top3\n'+top3.map(s=>`${s.name}(PM${(s.pm_id||0)+1
       async function arenaRunCycle(cb){const pms=initPMs();let ss=AL.get('strategies')||[],trs=AL.get('trades')||[];cb&&cb('拉取日线...');let kl=AL.get('klines');try{const r=await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=1000');if(r.ok){const raw=await r.json();kl=raw.map(k=>({openTime:k[0],open:+k[1],high:+k[2],low:+k[3],close:+k[4],volume:+k[5],closeTime:k[6],quoteVol:+k[7],trades:k[8]}));AL.set('klines',kl);}}catch(e){console.warn('[Arena] kline fetch err:',e.message)}if(!kl||kl.length<200){alert('无法获取日线数据');return}const ind=arenaIndicators(kl),li=kl.length-1,cp=kl[li].close;cb&&cb('评估持仓...');for(const t of trs){if(t.status!=='open')continue;const st=ss.find(s=>s.id===t.strategyId);if(!st){t.status='orphaned';continue}if(arenaChkExit(st,ind,li,t.entryPrice)){t.exitPrice=cp;t.exitTime=new Date().toISOString();t.status='closed';t.exitReason='rule';const gr=(t.exitPrice/t.entryPrice-1);t.pnlPct=+(gr*100).toFixed(2);t.pnlUsdt=+(t.capitalUsed*gr).toFixed(2);}}const now=new Date(),generated=[],cfg=AL.get('config')||{};for(const pm of pms){const pms2=ss.filter(s=>s.pm_id===pm.id&&s.status!=='eliminated'&&s.status!=='invalid');const slots=arenaSlots(pm);if(pms2.length>=slots)continue;const newest=pms2.sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''))[0];if(newest){const ds=(now-new Date(newest.created_at))/(86400000);if(ds<3)continue;}cb&&cb(`PM-${pm.id+1}「${pm.name}」生成中...`);try{const ns=await arenaCallLLM(pm,kl);for(const s of ns){if(s.status==='invalid')continue;const bt=arenaBacktest(s,kl);s.leverage=s.leverage||1;var rawScore=arenaScore(bt.validation);s.rawScore=rawScore;s.score=arenaScore(bt.validation,s.leverage);s.sharpe=bt.validation.sharpeRatio;s.winRate=bt.validation.winRate;s.maxDD=bt.validation.maxDrawdownPct;s.returnPct=bt.validation.totalReturnPct;s.trades=bt.trades;s.calmar=bt.validation.calmarRatio;s.liquidations=bt.validation.liquidations||0;s.backtest_date=now.toISOString();s.status=(rawScore>=35&&bt.validation.totalTrades>=5)?'paper':'eliminated';if(s.status==='eliminated')s.eliminated_reason='回测未通过(score='+rawScore.toFixed(1)+',trades='+bt.validation.totalTrades+')';generated.push(s.name);ss.push(s);}}catch(e){console.error(`[Arena] PM${pm.id+1}:`,e.message)}}cb&&cb('排名中...');const active=ss.filter(s=>s.status!=='eliminated'&&s.status!=='invalid'&&s.score!=null);active.sort((a,b)=>(b.score||0)-(a.score||0));if(active.length>5){for(const s of active.slice(-2)){s.status='eliminated';s.eliminated_reason='排名末位淘汰';s.eliminated_at=now.toISOString();}}for(const s of active.filter(s=>s.status==='paper'&&s.score<0)){s._bad=((s._bad||0)+1);if(s._bad>=2){s.status='eliminated';s.eliminated_reason='连续不佳';s.eliminated_at=now.toISOString();}}const top2=active.filter(s=>s.status==='paper').slice(0,2);for(const s of top2){if(((s.rawScore||s.score||0)>=50)&&(s.trades||[]).length>=5){s.status='live';s.promoted_at=now.toISOString();}}const ranked=ss.filter(s=>s.status==='live'||s.status==='paper').sort((a,b)=>(b.score||0)-(a.score||0));const alloc=[50,30,15,5];for(let i=0;i<Math.min(ranked.length,4);i++)ranked[i].allocation_pct=alloc[i];for(const pm of pms){const ps2=ss.filter(s=>s.pm_id===pm.id&&s.status!=='eliminated'&&s.status!=='invalid');pm.strategyCount=ps2.length;const best=ps2.sort((a,b)=>(b.sharpe||0)-(a.sharpe||0))[0];if(best&&(best.sharpe||0)>pm.bestSharpe){pm.bestSharpe=best.sharpe;pm.bestStrategyName=best.name;}pm.totalSharpe=ps2.length?ps2.reduce((a,s)=>a+(s.sharpe||0),0)/ps2.length:pm.totalSharpe;pm.totalWinRate=ps2.length?ps2.reduce((a,s)=>a+(s.winRate||0),0)/ps2.length:pm.totalWinRate;pm.weeksAlive+=.1;pm.level=arenaPMLevel(pm);const hasTop3=ranked.slice(0,3).some(s=>s.pm_id===pm.id);pm._noTop3Weeks=hasTop3?0:(pm._noTop3Weeks||0)+1;if(pm._noTop3Weeks>=6){const np=PM_PERSONAS[Math.floor(Math.random()*PM_PERSONAS.length)];Object.assign(pm,{...np,level:1,totalSharpe:0,totalWinRate:0,weeksAlive:0,strategyCount:0,bestStrategyName:'',bestSharpe:0,hiredAt:now.toISOString(),_noTop3Weeks:0});for(const s of ss.filter(s=>s.pm_id===pm.id&&s.status!=='eliminated')){s.status='eliminated';s.eliminated_reason='PM被开除';s.eliminated_at=now.toISOString();}}}AL.set('strategies',ss);AL.set('trades',trs);AL.set('pms',pms);AL.set('state',{lastCycle:now.toISOString(),totalCycles:(AL.get('state')||{}).totalCycles+1||1});var verify=AL.get('strategies');console.log('[Arena] Saved', verify.length, 'strategies,', generated.length, 'new,', ranked.length, 'ranked');return{generated,ranked,cycleTime:now.toISOString()};}
 
       // ── Render ──
-      function arenaRender(){const pms=AL.get('pms')||[],ss=AL.get('strategies')||[],trs=AL.get('trades')||[],st=AL.get('state');document.getElementById('arenaConnecting').style.display='none';document.getElementById('arenaContent').style.display='flex';const badge=document.getElementById('arenaStatusBadge');badge.textContent=st?'运转中':'就绪';badge.className='arena-status-badge online';const active=ss.filter(s=>s.status!=='eliminated'&&s.status!=='invalid');document.getElementById('arenaPmCards').innerHTML=pms.sort((a,b)=>b.level-a.level).map((pm,i)=>{const ps=active.filter(s=>s.pm_id===pm.id),avgS=ps.length?(ps.reduce((a,s)=>a+(s.score||0),0)/ps.length).toFixed(1):'-';return`<div class="arena-pm-card${i===0?' pm-lead':''}"><div style="display:flex;justify-content:space-between;align-items:center"><span class="arena-pm-name" style="color:${pm.color}">Lv${pm.level} ${pm.name}</span><span style="font-size:.72rem;font-weight:700">${avgS}</span></div><div class="arena-pm-stats">${pm.philosophy} · ${ps.length}策略 · ${ps.filter(s=>s.status==='live').length}实盘 · ${pm.weeksAlive.toFixed(0)}周</div></div>`;}).join('');document.getElementById('arenaStratList').innerHTML=active.sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,10).map(s=>{const sc=s.status==='live'?'live':s.status==='paper'?'paper':s.status==='new'?'new':'eliminated';const pm=pms.find(p=>p.id===s.pm_id);return`<div class="arena-strat-row ${sc}"><span class="arena-badge ${s.status?.toUpperCase()}">${s.status||'NEW'}</span><span class="arena-strat-name" title="${s.name||''}">${s.name||'?'}${(s.leverage||1)>1?' '+s.leverage+'x':''}</span><span style="font-size:.6rem;color:${pm?.color||'var(--muted)'}">${pm?.name||'?'}</span><span class="arena-strat-score" style="color:${(s.score||0)>=60?'var(--green)':(s.score||0)>=40?'#c26a27':'var(--red)'}">${(s.score||0).toFixed(0)}</span></div>`;}).join('')||'<div style="font-size:.7rem;color:var(--muted);text-align:center">点击「▶ 运转」开始</div>';const ranked=active.filter(s=>s.allocation_pct).sort((a,b)=>(b.score||0)-(a.score||0));document.getElementById('arenaAlloc').innerHTML=ranked.slice(0,4).map(s=>`<div><div style="display:flex;justify-content:space-between;font-size:.66rem;margin-bottom:2px"><span style="color:var(--muted)">${s.name}</span><span style="font-weight:700">${s.allocation_pct}%</span></div><div class="arena-alloc-bar-wrap"><div class="arena-alloc-bar ${s.status}" style="width:${s.allocation_pct}%"></div></div></div>`).join('')||'<div style="font-size:.7rem;color:var(--muted)">运转后分配</div>';const ptOpen=trs.filter(t=>t.status==='open'),ptClosed=trs.filter(t=>t.status==='closed').slice(-5);document.getElementById('arenaPaperTrades').innerHTML=trs.length?`${ptOpen.length>0?`<div style="font-size:.62rem;color:var(--green);font-weight:700;margin-bottom:2px">持仓 ${ptOpen.length} 笔</div>`:''}<table class="arena-mini-table"><tr><th>策略</th><th>入场</th><th>P&L</th></tr>${[...ptOpen,...ptClosed].slice(0,6).map(t=>`<tr style="color:${t.status==='open'?'var(--green)':(t.pnlPct||0)>=0?'var(--green)':'var(--red)'}"><td style="max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.strategyName||'?'}</td><td>$${t.entryPrice?Math.round(t.entryPrice).toLocaleString():'?'}</td><td>${t.pnlPct!=null?(t.pnlPct>=0?'+':'')+t.pnlPct.toFixed(1)+'%':'--'}</td></tr>`).join('')}</table>`:'<div style="font-size:.66rem;color:var(--muted)">暂无</div>';document.getElementById('arenaLiveTrades').innerHTML='<div style="font-size:.66rem;color:var(--muted)">实盘需手动下单（通过左侧信号面板），信号来源于 Live 策略</div>';}
+      function arenaRender(){
+        var pms=AL.get('pms')||[],ss=AL.get('strategies')||[],trs=AL.get('trades')||[],st=AL.get('state');
+        document.getElementById('arenaConnecting').style.display='none';
+        document.getElementById('arenaContent').style.display='flex';
+        var badge=document.getElementById('arenaStatusBadge');
+        badge.textContent=ss.length+'策略·'+(st&&st.totalCycles||0)+'轮';
+        badge.className='arena-status-badge online';
+
+        var active=ss.filter(function(s){return s.status!=='eliminated'&&s.status!=='invalid';});
+        var eliminated=ss.filter(function(s){return s.status==='eliminated';});
+
+        // PM cards
+        document.getElementById('arenaPmCards').innerHTML=pms.sort(function(a,b){return b.level-a.level;}).map(function(pm,i){
+          var ps=active.filter(function(s){return s.pm_id===pm.id;});
+          var avgS=ps.length?(ps.reduce(function(a,s){return a+(s.score||0);},0)/ps.length).toFixed(1):'-';
+          var cls=i===0?' pm-lead':'';
+          return '<div class="arena-pm-card'+cls+'"><div style="display:flex;justify-content:space-between;align-items:center"><span class="arena-pm-name" style="color:'+pm.color+'">Lv'+pm.level+' '+pm.name+'</span><span style="font-size:.72rem;font-weight:700">'+avgS+'</span></div><div class="arena-pm-stats">'+pm.philosophy+' · '+ps.length+'策略 · '+ps.filter(function(s){return s.status==='live';}).length+'实盘 · '+pm.weeksAlive.toFixed(0)+'周</div></div>';
+        }).join('');
+
+        // Strategy list (show active + eliminated, active first)
+        var allDisplay=active.concat(eliminated.slice(0,20));
+        var stratHtml='';
+        if (allDisplay.length===0) {
+          stratHtml='<div style="font-size:.7rem;color:var(--muted);text-align:center">点击「▶ 运转」开始</div>';
+        } else {
+          // Summary line
+          var elimReasons={};
+          eliminated.forEach(function(s){
+            var r=s.eliminated_reason||'未知';
+            elimReasons[r]=(elimReasons[r]||0)+1;
+          });
+          if (eliminated.length>0) {
+            var reasonText=Object.entries(elimReasons).map(function(e){return e[1]+'个: '+e[0];}).join(' · ');
+            stratHtml+='<div style="font-size:.6rem;color:var(--red);margin-bottom:4px;text-align:center">'+eliminated.length+'个已淘汰 — '+reasonText+'</div>';
+          }
+          if (active.length===0 && eliminated.length>0) {
+            stratHtml+='<div style="font-size:.65rem;color:var(--muted);text-align:center;padding:4px;background:#fff5e0;border-radius:6px;margin-bottom:4px">⚠ 所有策略均被淘汰。可能是:<br>1) 评分阈值过高 2) 交易次数不足 3) 策略全部无效。<br>尝试降低杠杆或放宽止损后重新运转。</div>';
+          }
+          // Render each strategy
+          stratHtml+=allDisplay.slice(0,15).map(function(s){
+            var sc=s.status==='live'?'live':s.status==='paper'?'paper':s.status==='new'?'new':'eliminated';
+            var pm=pms.find(function(p){return p.id===s.pm_id;});
+            var levTag=(s.leverage||1)>1?' '+s.leverage+'x':'';
+            var scoreColor=(s.score||0)>=60?'var(--green)':(s.score||0)>=40?'#c26a27':'var(--red)';
+            var rowCls='arena-strat-row '+sc;
+            return '<div class="'+rowCls+'"><span class="arena-badge '+s.status.toUpperCase()+'">'+(s.status||'NEW')+'</span><span class="arena-strat-name" title="'+(s.name||'')+'">'+(s.name||'?')+levTag+'</span><span style="font-size:.6rem;color:'+(pm?pm.color:'var(--muted)')+'">'+(pm?pm.name:'?')+'</span><span class="arena-strat-score" style="color:'+scoreColor+'">'+(s.score||0).toFixed(0)+'</span></div>';
+          }).join('');
+        }
+        document.getElementById('arenaStratList').innerHTML=stratHtml;
+
+        // Allocation
+        var ranked=active.filter(function(s){return s.allocation_pct;}).sort(function(a,b){return (b.score||0)-(a.score||0);});
+        document.getElementById('arenaAlloc').innerHTML=ranked.slice(0,4).map(function(s){
+          return '<div><div style="display:flex;justify-content:space-between;font-size:.66rem;margin-bottom:2px"><span style="color:var(--muted)">'+s.name+'</span><span style="font-weight:700">'+s.allocation_pct+'%</span></div><div class="arena-alloc-bar-wrap"><div class="arena-alloc-bar '+s.status+'" style="width:'+s.allocation_pct+'%"></div></div></div>';
+        }).join('')||'<div style="font-size:.7rem;color:var(--muted)">运转后分配</div>';
+
+        // Paper trades
+        var ptOpen=trs.filter(function(t){return t.status==='open';});
+        var ptClosed=trs.filter(function(t){return t.status==='closed';}).slice(-5);
+        if (trs.length===0) {
+          document.getElementById('arenaPaperTrades').innerHTML='<div style="font-size:.66rem;color:var(--muted)">暂无</div>';
+        } else {
+          var ptRows=[];
+          ptOpen.forEach(function(t){ptRows.push(t);});
+          ptClosed.forEach(function(t){ptRows.push(t);});
+          var ptHtml=(ptOpen.length>0?'<div style="font-size:.62rem;color:var(--green);font-weight:700;margin-bottom:2px">持仓 '+ptOpen.length+' 笔</div>':'');
+          ptHtml+='<table class="arena-mini-table"><tr><th>策略</th><th>入场</th><th>P&L</th></tr>';
+          ptRows.slice(0,6).forEach(function(t){
+            var color=t.status==='open'?'var(--green)':(t.pnlPct||0)>=0?'var(--green)':'var(--red)';
+            ptHtml+='<tr style="color:'+color+'"><td style="max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(t.strategyName||'?')+'</td><td>$'+(t.entryPrice?Math.round(t.entryPrice).toLocaleString():'?')+'</td><td>'+(t.pnlPct!=null?(t.pnlPct>=0?'+':'')+t.pnlPct.toFixed(1)+'%':'--')+'</td></tr>';
+          });
+          ptHtml+='</table>';
+          document.getElementById('arenaPaperTrades').innerHTML=ptHtml;
+        }
+        document.getElementById('arenaLiveTrades').innerHTML='<div style="font-size:.66rem;color:var(--muted)">实盘需手动下单（通过左侧信号面板），信号来源于 Live 策略</div>';
+      }
 
       // ── Buttons ──
       document.getElementById('arenaRunCycle').addEventListener('click', async function(){
