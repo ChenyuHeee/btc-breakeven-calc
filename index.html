@@ -1173,6 +1173,7 @@
           }
           updateChallenge();
           fetchSignal(); // 同步后立即刷新信号按钮状态（liveUsdtBalance 已更新）
+          fetchOrderBook();
           chSyncBtn.textContent = "✅ 已同步"; chSyncBtn.className = "ch-btn sync-ok";
           setTimeout(() => { chSyncBtn.textContent = "🔄 同步账户"; chSyncBtn.className = "ch-btn"; }, 3000);
           const errEl = document.getElementById("chSyncErrMsg");
@@ -1252,6 +1253,7 @@
           }
           updateChallenge();
           fetchSignal();
+          fetchOrderBook();
           chSyncBtn.textContent = "✅ 已同步(合约)"; chSyncBtn.className = "ch-btn sync-ok";
           setTimeout(() => { chSyncBtn.textContent = "🔄 同步账户"; chSyncBtn.className = "ch-btn"; }, 3000);
           const errEl = document.getElementById("chSyncErrMsg");
@@ -1441,6 +1443,37 @@
       let currentMarketPrice = null;
       let socket = null;
       let reconnectTimer = null;
+      let _orderBookBids = null; // cached bid levels: [[price, qty], ...]
+
+      // ── Fetch order book for slippage estimation ──
+      async function fetchOrderBook() {
+        try {
+          const resp = await fetch(BINANCE_API + '/api/v3/depth?symbol=BTCUSDT&limit=20');
+          if (!resp.ok) return;
+          const data = await resp.json();
+          _orderBookBids = (data.bids || []).map(function(b) {
+            return [parseFloat(b[0]), parseFloat(b[1])];
+          });
+        } catch(e) {}
+      }
+
+      // ── Estimate fill price for selling X BTC at market ──
+      function estimateSellPrice(btcQty) {
+        if (!_orderBookBids || !_orderBookBids.length) return null;
+        var remaining = btcQty;
+        var totalCost = 0;
+        var totalQty = 0;
+        for (var i = 0; i < _orderBookBids.length && remaining > 0.00000001; i++) {
+          var price = _orderBookBids[i][0];
+          var avail = _orderBookBids[i][1];
+          var take = Math.min(remaining, avail);
+          totalCost += take * price;
+          totalQty += take;
+          remaining -= take;
+        }
+        if (remaining > 0.00000001) return null; // Not enough depth
+        return totalCost / totalQty; // weighted average fill price
+      }
 
       // ── RSI 计算 ──
       function calcRSI(closes, period = 14) {
@@ -1636,14 +1669,17 @@
             }
             const avgCost = totalNetQty > 0.000001 ? totalCost / totalNetQty : null;
             if (avgCost && avgCost > 0) {
-              // 卖出预估手续费 0.1%（默认，不用BNB折扣）
+              // 卖出价：优先用订单簿加权均价，fallback当前价
+              var sellPrice = estimateSellPrice(liveBtcBalance) || (price * 0.9995);
+              var slippagePct = price > 0 ? ((price - sellPrice) / price * 100) : 0;
               const SELL_FEE = 0.001;
-              const netSellPrice = price * (1 - SELL_FEE);
+              const netSellPrice = sellPrice * (1 - SELL_FEE);
               const pnlUsdt = (netSellPrice - avgCost) * liveBtcBalance;
               const pnlPct  = (netSellPrice / avgCost - 1) * 100;
               hmPnl.textContent    = (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "%";
               hmPnl.style.color    = pnlPct >= 0 ? "var(--green)" : "var(--red)";
-              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（含买卖手续费，均价 $" + Math.round(avgCost).toLocaleString() + "）";
+              var slipInfo = slippagePct > 0.1 ? ' · 滑点-' + slippagePct.toFixed(2) + '%' : '';
+              hmPnlSub.textContent = (pnlUsdt >= 0 ? "+" : "") + pnlUsdt.toFixed(2) + " USDT（含买卖手续费+滑点，均价 $" + Math.round(avgCost).toLocaleString() + "，估卖 $" + Math.round(sellPrice).toLocaleString() + slipInfo + "）";
             } else {
               hmPnl.textContent    = "--";
               hmPnl.style.color    = "var(--text)";
@@ -2361,6 +2397,8 @@
       }
 
       signalRefresh.addEventListener("click", fetchSignal);
+      fetchOrderBook();
+      setInterval(fetchOrderBook, 30000);
       fetchSignal();
       setInterval(fetchSignal, 5 * 60 * 1000);
 
