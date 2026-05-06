@@ -2458,7 +2458,7 @@
       }
 
       function arenaEvalRule(r, ind, i) {
-        const {indicator,p=[],op,v,vs} = r; let val;
+        var indicator=r.indicator,p=r.params||[],op=r.operator||r.op,v=r.value||r.v,vs=r.value_symbol||r.vs;var val;
         switch(indicator) {
           case'rsi':val=ind.rsi14[i];break; case'sma':val=(ind['sma'+p[0]]||[])[i];break; case'ema':val=(ind['ema'+p[0]]||[])[i];break;
           case'macd':{if(i<35){val=null;break} const m=calcMACD(ind.closes.slice(0,i+1),p[0]||12,p[1]||26,p[2]||9); val=m?m.histogram:null;break;}
