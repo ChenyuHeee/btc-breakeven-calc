@@ -2458,17 +2458,49 @@
         return { closes:cl, highs:hi, lows:lo, volumes:vo, rsi14, sma20, sma50, sma200, ema9, ema21, atr14, bb, volRatio:volR, bbPos:bbP };
       }
 
-      function arenaEvalRule(r, ind, i) {
-        var indicator=r.indicator,p=r.params||[],op=r.operator||r.op,v=r.value||r.v,vs=r.value_symbol||r.vs;var val;
-        switch(indicator) {
-          case'rsi':val=ind.rsi14[i];break; case'sma':val=(ind['sma'+p[0]]||[])[i];break; case'ema':val=(ind['ema'+p[0]]||[])[i];break;
-          case'macd':{if(i<35){val=null;break} const m=calcMACD(ind.closes.slice(0,i+1),p[0]||12,p[1]||26,p[2]||9); val=m?m.histogram:null;break;}
-          case'bb_position':val=ind.bbPos[i];break; case'atr':val=ind.atr14[i];break; case'price':val=ind.closes[i];break;
-          case'price_change':{const d=p[0]||1;val=i>=d?(ind.closes[i]/ind.closes[i-d]-1)*100:null;break;}
-          case'volume_ratio':val=ind.volRatio[i];break; default:return false;
+      function parseIndicatorRef(ref,ind,i){
+        if(typeof ref!=='string')return null;
+        var s=ref.toLowerCase().replace(/\s/g,'');
+        if(s==='signal'&&i>=35){var m=calcMACD(ind.closes.slice(0,i+1));return m?m.signal:null;}
+        var m2=s.match(/^(sma|ema|atr)\(?(\d+)\)?$/);if(m2)return arenaIndVal(m2[1],m2[2]?[+m2[2]]:[],ind,i);
+        if(s==='price')return ind.closes[i];
+        if(s==='bb_upper'){return arenaIndVal('bb_position',[],ind,i);}
+        return null;
+      }
+      function arenaIndVal(indicator,params,ind,i){
+        var p=params;p=Array.isArray(p)?p:(p==null?[]:[+p||0]);
+        switch(indicator){
+          case'rsi':return ind.rsi14[i];
+          case'sma':return arenaSMA(ind.closes,p[0]||20)[i];
+          case'ema':return calcEMA(ind.closes,p[0]||9)[i];
+          case'macd':{if(i<35)return null;var m=calcMACD(ind.closes.slice(0,i+1),p[0]||12,p[1]||26,p[2]||9);return m?m.histogram:null;}
+          case'bb_position':return ind.bbPos[i];
+          case'atr':return ind.atr14[i];
+          case'price':return ind.closes[i];
+          case'price_change':{var d=p[0]||1;return i>=d?(ind.closes[i]/ind.closes[i-d]-1)*100:null;}
+          case'volume_ratio':return ind.volRatio[i];
+          default:return null;
         }
+      }
+      function arenaEvalRule(r, ind, i) {
+        var indicator=r.indicator;var p=r.params;p=Array.isArray(p)?p:(p==null?[]:[+p||0]);var op=r.operator||r.op,v=r.value||r.v,vs=r.value_symbol||r.vs;
+        var val=arenaIndVal(indicator,p,ind,i);
         if(val==null||!isFinite(val))return false;
-        const cmp=vs==='price'?ind.closes[i]:v; if(cmp==null)return false;
+        var cmp;if(vs==='price')cmp=ind.closes[i];else if(vs==='signal'&&i>=35){var mc=calcMACD(ind.closes.slice(0,i+1));cmp=mc?mc.signal:null;}else cmp=v;
+        if(typeof cmp==='string'&&isNaN(+cmp)&&cmp!=='signal'){
+          var ref=parseIndicatorRef(cmp,ind,i); if(ref!=null)cmp=ref; else return false;
+        }
+        if(cmp==null||!isFinite(+cmp))return false; cmp=+cmp;
+        if(op==='crosses_above'||op==='cross_above'){
+          if(i<1)return false;
+          var pv=arenaIndVal(indicator,p,ind,i-1);
+          return pv!=null&&isFinite(pv)&&pv<=cmp&&val>cmp;
+        }
+        if(op==='crosses_below'||op==='cross_below'){
+          if(i<1)return false;
+          var pv2=arenaIndVal(indicator,p,ind,i-1);
+          return pv2!=null&&isFinite(pv2)&&pv2>=cmp&&val<cmp;
+        }
         switch(op){case'<':return val<cmp;case'>':return val>cmp;case'<=':return val<=cmp;case'>=':return val>=cmp;case'==':return Math.abs(val-cmp)<.001;default:return false;}
       }
       function arenaChkEntry(s,ind,i){if(!s.entry_rules||!s.entry_rules.length)return false;const r=s.entry_rules.map(r=>arenaEvalRule(r,ind,i));return s.entry_logic==='OR'?r.some(Boolean):r.every(Boolean);}
@@ -2521,12 +2553,20 @@ ${dead.length?'## 你的失败策略（吸取教训！）\n'+dead.map(s=>`${s.na
 
 ${top3.length?'## 竞争对手 Top3\n'+top3.map(s=>`${s.name}(PM${(s.pm_id||0)+1}): Sharpe=${(s.sharpe||0).toFixed(2)} Win=${(s.winRate||0).toFixed(0)}% ${s.description||''}`).join('\n'):''}
 
-## 策略格式
-输出JSON: {"strategies":[{...},{...}]}，恰好2个策略。
-每个策略: {name,description,entry_rules,entry_logic,take_profit_pct,stop_loss_pct,max_hold_bars,exit_rules,exit_logic,position_size_pct(10-50),leverage(1|2|3|5)}
-杠杆规则: 1x=现货 2x=轻杠杆(爆仓-50%) 3x=中杠杆(爆仓-33%) 5x=高杠杆(爆仓-20%)。止损%必须<爆仓距离否则无效。高杠杆评分会被惩罚(除sqrt杠杆)，高Sharpe才能拿高分。高置信度用3x，一般的用1-2x。
-指标: rsi(14),sma(20|50|200),ema(9|21),macd(12,26,9),bb_position,atr(14),price,price_change(1|3|5),volume_ratio
-盈亏比>1.5。两策略不同逻辑。只输出JSON。`;}
+## 策略格式（严格遵守！）
+输出JSON: {"strategies":[{},{}]}，恰好2个策略。
+
+每条规则rule格式: {"indicator":"rsi","params":[14],"operator":"<","value":35}
+- indicator: rsi/sma/ema/macd/bb_position/atr/price/price_change/volume_ratio
+- params: 整数数组如[14]，不可为null/空字符串。sma(20)用[20]，macd用[12,26,9]
+- operator: < > <= >= == crosses_above crosses_below（cross仅在需要金叉/死叉时用）
+- value: 数字如35。不要用字符串引用指标！
+- 要比较指标和价格时，用 value_symbol:"price" 并将value设为null。例：{"indicator":"sma","params":[20],"operator":">","value_symbol":"price"} 表示sma20>价格
+- MACD的value为0表示多空分界；要比较MACD和signal线时用value_symbol:"signal"
+
+完整策略对象: {name,description,entry_rules:[{indicator,params,operator,value,value_symbol?}],entry_logic:"AND"|"OR",take_profit_pct(数字如5),stop_loss_pct(数字如2),max_hold_bars(整数或null),exit_rules,exit_logic,position_size_pct(10-50整数),leverage(1|2|3|5整数)}
+杠杆: 1x现货 2x-50%爆仓 3x-33%爆仓 5x-20%爆仓。止损%须<爆仓距离。高杠杆评分(除sqrt杠杆)需高Sharpe。
+盈亏比>1.5。只输出纯JSON。`;}
 
       async function arenaCallLLM(pm,kl){const key=(document.getElementById('arenaDsKey')?.value||'').trim();if(!key)throw new Error('请填入DeepSeek API Key');const mkt=arenaMarketCtx(kl);const sp=arenaPMPrompt(pm)+`\n\n当前市场(${mkt.date}): BTC $${mkt.price}, RSI14 ${mkt.rsi14}, SMA200 $${mkt.sma200}, 30日 ${mkt.ret30}%, 90日 ${mkt.ret90}%, MACD ${mkt.macdHist}, ATR $${mkt.atr14}`;const r=await fetch('https://api.deepseek.com/v1/chat/completions',{method:'POST',headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model:'deepseek-chat',messages:[{role:'system',content:sp},{role:'user',content:'生成2个日线BTCUSDT策略。输出: {"strategies":[{...},{...}]}'}],temperature:.85,max_tokens:4096,response_format:{type:'json_object'}})});if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(`DeepSeek ${r.status}: ${t.slice(0,200)}`)}const d=await r.json(),c=d?.choices?.[0]?.message?.content;if(!c)throw new Error('空响应');let p;try{p=JSON.parse(c)}catch{const m=c.match(/\{[\s\S]*\}/);if(m)p=JSON.parse(m[0]);else throw new Error('解析失败')}let st=p.strategies||p;if(!Array.isArray(st))st=[st];const ts=new Date().toISOString();return st.map((s,i)=>{const v=arenaValidate(s);return{id:`pm${pm.id+1}-${ts.slice(0,10)}-${i+1}-${Math.random().toString(36).slice(2,6)}`,pm_id:pm.id,name:s.name||`策略${i+1}`,description:s.description||'',entry_rules:s.entry_rules||[],entry_logic:s.entry_logic||'AND',take_profit_pct:+s.take_profit_pct||null,stop_loss_pct:+s.stop_loss_pct||null,max_hold_bars:+s.max_hold_bars||null,exit_rules:s.exit_rules||[],exit_logic:(s.exit_logic||'OR').toUpperCase(),position_size_pct:+s.position_size_pct||25,leverage:+s.leverage||1,max_concurrent_positions:s.max_concurrent_positions||1,max_strategy_drawdown_pct:s.max_strategy_drawdown_pct||15,status:v.valid?'new':'invalid',validation_errors:v.errors,created_at:ts,score:null,sharpe:null,winRate:null,maxDD:null,trades:null};});}
 
